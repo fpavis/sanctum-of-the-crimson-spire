@@ -1,0 +1,1100 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=MedievalSharp&family=Press+Start+2P&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #050508;
+  font-family: 'MedievalSharp', cursive, sans-serif;
+  color: #eeddbb;
+}
+
+#canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* --- RETRO RPG START SCREEN WITH GENERATED LOGO --- */
+.start-screen-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at center, rgba(35, 12, 22, 0.85) 0%, rgba(5, 4, 8, 0.98) 100%),
+    repeating-linear-gradient(0deg, rgba(255, 200, 100, 0.02) 0px, rgba(0, 0, 0, 0.25) 2px, transparent 4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  pointer-events: auto;
+}
+
+.start-screen-frame {
+  position: relative;
+  width: 780px;
+  max-width: 92vw;
+  background:
+    linear-gradient(180deg, #1b1512 0%, #0e0b0a 100%);
+  border: 4px solid #a88238;
+  outline: 3px solid #2a1d10;
+  border-radius: 8px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.95),
+    0 0 40px rgba(204, 44, 44, 0.35),
+    inset 0 0 24px rgba(168, 130, 56, 0.28);
+  overflow: hidden;
+}
+
+.frame-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffd766;
+  background: #442211;
+  z-index: 5;
+}
+.frame-corner.tl { top: 6px; left: 6px; }
+.frame-corner.tr { top: 6px; right: 6px; }
+.frame-corner.bl { bottom: 6px; left: 6px; }
+.frame-corner.br { bottom: 6px; right: 6px; }
+
+/* Crops the bottom 15% of game_title_logo.jpg so only the key art + game logo show */
+.title-logo-viewport {
+  position: relative;
+  width: 100%;
+  height: 345px;
+  overflow: hidden;
+  border-bottom: 3px solid #a88238;
+  background: #09060c;
+}
+
+.title-logo-img {
+  width: 100%;
+  height: 118%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  image-rendering: auto;
+}
+
+.title-logo-vignette {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 65%, rgba(14,11,10,0.96) 100%);
+  pointer-events: none;
+}
+
+.start-screen-body {
+  padding: 20px 32px 26px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.game-subtitle-banner {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #ffd766;
+  text-shadow: 0 2px 6px #000;
+}
+
+.feature-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.feature-tag {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffddaa;
+  background: rgba(48, 28, 18, 0.85);
+  border: 1px solid #8b6632;
+  padding: 4px 10px;
+  border-radius: 3px;
+  letter-spacing: 0.8px;
+}
+
+.loading-bar-shell {
+  width: 100%;
+  max-width: 560px;
+  height: 14px;
+  background: #140e0b;
+  border: 2px solid #775533;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 6px #000;
+}
+
+.loading-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #aa1111, #ff5500, #ffd700);
+  box-shadow: 0 0 12px #ff6600;
+  transition: width 0.2s ease-out;
+}
+
+.loading-status-text {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  color: #e2be82;
+  letter-spacing: 0.8px;
+}
+
+.start-game-btn {
+  margin-top: 6px;
+  background: linear-gradient(180deg, #b82424 0%, #6e1111 100%);
+  border: 3px solid #ffd766;
+  outline: 2px solid #3a1212;
+  color: #fff6dd;
+  font-family: 'Cinzel', serif;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 2.5px;
+  padding: 13px 40px;
+  border-radius: 5px;
+  cursor: pointer;
+  box-shadow:
+    0 6px 24px rgba(255, 50, 30, 0.55),
+    inset 0 1px 2px rgba(255, 255, 255, 0.45);
+  transition: all 0.18s ease;
+}
+
+.start-game-btn:hover {
+  background: linear-gradient(180deg, #d93232 0%, #8c1818 100%);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 10px 30px rgba(255, 180, 60, 0.65);
+}
+
+/* --- HUD CONTAINER & SPRITE-STYLE GOTHIC OVERLAY --- */
+.hud-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.viewport-gothic-arch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 4px solid rgba(92, 68, 38, 0.55);
+  box-shadow: inset 0 0 45px rgba(0, 0, 0, 0.75);
+  z-index: 11;
+}
+
+.arch-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #b58c44;
+  background:
+    linear-gradient(135deg, rgba(60, 44, 24, 0.9) 0%, rgba(22, 16, 10, 0.9) 100%);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+}
+.arch-tl { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+.arch-tr { top: 4px; right: 4px; border-left: none; border-bottom: none; }
+.arch-bl { bottom: 4px; left: 4px; border-right: none; border-top: none; }
+.arch-br { bottom: 4px; right: 4px; border-left: none; border-top: none; }
+
+/* --- ENGRAVED GOTHIC STONE & GOLD PLATES --- */
+.gothic-plate {
+  position: relative;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 215, 120, 0.015) 0px, rgba(255, 215, 120, 0.015) 2px, transparent 2px, transparent 6px),
+    linear-gradient(180deg, rgba(26, 21, 18, 0.94) 0%, rgba(12, 10, 10, 0.96) 100%);
+  border: 3px solid #9c7a40;
+  outline: 2px solid #261b10;
+  border-radius: 5px;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.9),
+    inset 0 0 12px rgba(168, 130, 56, 0.25);
+}
+
+.plate-rivet {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #ffd766;
+  border: 1px solid #3a2410;
+  border-radius: 1px;
+}
+.plate-rivet.tl { top: 4px; left: 4px; }
+.plate-rivet.tr { top: 4px; right: 4px; }
+.plate-rivet.bl { bottom: 4px; left: 4px; }
+.plate-rivet.br { bottom: 4px; right: 4px; }
+
+/* --- DAMAGE FRAME & VIGNETTE FLASH --- */
+.damage-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border: 14px solid rgba(255, 18, 18, 0.94);
+  box-shadow:
+    inset 0 0 80px 32px rgba(255, 0, 0, 0.88),
+    inset 0 0 18px 4px rgba(255, 130, 80, 0.95);
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.06) 44%, rgba(210, 0, 0, 0.76) 100%);
+  opacity: 0;
+  transition: opacity 0.04s ease-out;
+  z-index: 15;
+}
+
+/* --- LEVEL-UP POPUP BANNER --- */
+.levelup-popup {
+  position: absolute;
+  top: 86px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(44, 30, 10, 0.96) 0%, rgba(18, 12, 6, 0.98) 100%);
+  border: 3px solid #ffd700;
+  outline: 2px solid #553300;
+  border-radius: 6px;
+  padding: 10px 28px;
+  text-align: center;
+  box-shadow:
+    0 0 30px rgba(255, 215, 0, 0.75),
+    inset 0 0 15px rgba(255, 200, 60, 0.35);
+  z-index: 25;
+  pointer-events: none;
+  animation: pulsePrompt 0.9s infinite ease-in-out;
+}
+
+.levelup-crest {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #ffaa22;
+  letter-spacing: 3px;
+  margin-bottom: 4px;
+}
+
+.levelup-title {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff2aa;
+  text-shadow: 0 0 10px #ffd700, 0 2px 4px #000;
+  letter-spacing: 1.5px;
+}
+
+.levelup-subtitle {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #88ffaa;
+  margin-top: 3px;
+}
+
+/* --- CRT SCANLINE FILTER --- */
+.crt-scanlines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%),
+              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  background-size: 100% 3px, 6px 100%;
+  z-index: 20;
+}
+
+.crt-scanlines::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: radial-gradient(circle at center, transparent 65%, rgba(0, 0, 0, 0.6) 100%);
+  pointer-events: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* --- CROSSHAIR --- */
+.hud-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
+
+.crosshair-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  background: #00ffcc;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px #00ffcc;
+}
+
+.crosshair-line {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 4px rgba(0, 255, 204, 0.6);
+}
+
+.crosshair-line.top { top: 0; left: 11px; width: 2px; height: 6px; }
+.crosshair-line.bottom { bottom: 0; left: 11px; width: 2px; height: 6px; }
+.crosshair-line.left { top: 11px; left: 0; width: 6px; height: 2px; }
+.crosshair-line.right { top: 11px; right: 0; width: 6px; height: 2px; }
+
+/* --- TOP OBJECTIVES & SCORE PANEL --- */
+.top-panel {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  max-width: 365px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.quest-box {
+  padding: 10px 14px;
+}
+
+.quest-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  color: #ffcc66;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #5a4522;
+  padding-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.quest-item {
+  font-size: 12.5px;
+  color: #e0d0b0;
+  margin-top: 3px;
+}
+
+.score-box {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  font-weight: bold;
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+  padding: 4px 8px;
+}
+
+/* --- TOP CONTROLS BAR --- */
+.top-controls-bar {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.hud-btn {
+  background: linear-gradient(180deg, #241c14 0%, #120e0a 100%);
+  border: 2px solid #8b6a38;
+  color: #ffd7aa;
+  padding: 7px 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.75);
+  transition: all 0.2s ease;
+}
+
+.hud-btn:hover {
+  background: rgba(55, 36, 22, 0.95);
+  border-color: #ffd766;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* --- BOSS BAR --- */
+.boss-bar-container {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 520px;
+  max-width: 90vw;
+  z-index: 18;
+}
+
+.boss-title {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 900;
+  color: #ee77ff;
+  text-shadow: 0 0 10px #aa00ff, 0 2px 4px #000;
+  letter-spacing: 1.5px;
+  margin-bottom: 5px;
+}
+
+.boss-bar-track {
+  width: 100%;
+  height: 18px;
+  background: #110022;
+  border: 2px solid #cc55ff;
+  border-radius: 4px;
+  box-shadow: 0 0 14px rgba(153, 51, 204, 0.7), inset 0 0 8px #000;
+  overflow: hidden;
+}
+
+.boss-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #8800cc, #dd33ff, #ffaaff);
+  transition: width 0.15s ease-out;
+}
+
+/* --- BOTTOM SPRITE-STYLED GOTHIC STONE & GOLD CONSOLE --- */
+.gothic-hud-console {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  padding: 10px 22px 12px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 210, 120, 0.02) 0px, rgba(255, 210, 120, 0.02) 3px, transparent 3px, transparent 9px),
+    linear-gradient(180deg, #231c16 0%, #100c09 100%);
+  border: 3px solid #a88238;
+  outline: 3px solid #23180e;
+  border-radius: 10px 10px 4px 4px;
+  box-shadow:
+    0 10px 35px rgba(0, 0, 0, 0.95),
+    inset 0 2px 6px rgba(255, 220, 140, 0.28);
+  pointer-events: auto;
+}
+
+.console-pillar {
+  width: 12px;
+  height: 104px;
+  background: linear-gradient(90deg, #4a3720 0%, #b58c44 50%, #3a2a16 100%);
+  border: 2px solid #261a0d;
+  border-radius: 3px;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.7);
+}
+
+.console-center-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: center;
+}
+
+/* --- ARCANE LEVEL & XP PROGRESSION STRIP --- */
+.xp-progression-strip {
+  width: 100%;
+  background: #120e0b;
+  border: 2px solid #6e5228;
+  border-radius: 5px;
+  padding: 4px 10px 5px;
+  box-shadow: inset 0 2px 6px #000;
+}
+
+.xp-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 900;
+  margin-bottom: 3px;
+}
+
+.xp-level-badge {
+  color: #ffd766;
+  letter-spacing: 0.8px;
+}
+
+.xp-stat-bonus {
+  color: #66ffaa;
+  letter-spacing: 0.5px;
+}
+
+.xp-counter-text {
+  color: #ccb899;
+}
+
+.xp-bar-track {
+  width: 100%;
+  height: 7px;
+  background: #080605;
+  border: 1px solid #443218;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #b87700, #ffd700, #fff099);
+  box-shadow: 0 0 8px #ffd700;
+  transition: width 0.2s ease-out;
+}
+
+/* --- HEALTH & MANA ORBS --- */
+.orb-container {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orb {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #080808;
+  border: 3px solid #8a6d3b;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.health-orb { border-color: #a83232; }
+.mana-orb { border-color: #2e66a8; }
+
+.orb-glow {
+  position: absolute;
+  width: 114px;
+  height: 114px;
+  border-radius: 50%;
+  filter: blur(12px);
+  opacity: 0.5;
+  z-index: 1;
+}
+
+.health-glow { background: radial-gradient(circle, #ff2222 0%, transparent 70%); }
+.mana-glow { background: radial-gradient(circle, #2288ff 0%, transparent 70%); }
+
+.orb-liquid {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: height 0.2s ease-out;
+}
+
+.health-liquid {
+  background: linear-gradient(180deg, #ff4444 0%, #aa0000 70%, #550000 100%);
+  box-shadow: 0 0 15px #ff2222;
+}
+
+.mana-liquid {
+  background: linear-gradient(180deg, #44aaff 0%, #0055cc 70%, #002266 100%);
+  box-shadow: 0 0 15px #2288ff;
+}
+
+.orb-shine {
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  width: 30px;
+  height: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, transparent 100%);
+  border-radius: 50%;
+  transform: rotate(-30deg);
+  z-index: 3;
+}
+
+.orb-text {
+  position: absolute;
+  z-index: 4;
+  font-family: 'Cinzel', serif;
+  font-size: 21px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 2px 4px #000000, 0 0 8px #000000;
+}
+
+.orb-label {
+  position: absolute;
+  bottom: -4px;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  color: #ffd7aa;
+  text-shadow: 0 2px 4px #000000;
+  z-index: 4;
+}
+
+/* --- SPELL BAR & GENERATED PIXEL-ART SPELL ICONS --- */
+.spell-bar {
+  display: flex;
+  gap: 10px;
+  background: #120e0b;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 2px solid #775533;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.spell-slot {
+  position: relative;
+  width: 74px;
+  height: 82px;
+  background: radial-gradient(circle at center, #261e16 0%, #120e0a 100%);
+  border: 2px solid #5a4326;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  overflow: hidden;
+}
+
+.spell-slot:hover {
+  border-color: #cc9944;
+  transform: translateY(-2px);
+}
+
+.spell-slot.active {
+  border-color: #ffd700;
+  background: radial-gradient(circle at center, #3d2f18 0%, #1c150c 100%);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.65), inset 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.spell-key {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffd766;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid #664c24;
+  padding: 0px 4px;
+  border-radius: 2px;
+  z-index: 3;
+}
+
+/* Generated Chroma-Keyed 4x1 Spell Icons Sheet */
+.spell-icon-gfx {
+  width: 44px;
+  height: 44px;
+  margin-top: 4px;
+  background-image: url('/assets/spell_icons_sheet.jpg');
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.95));
+}
+
+.icon-pyro   { background-position: 0% 0%; }
+.icon-frost  { background-position: 33.333% 0%; }
+.icon-arcane { background-position: 66.666% 0%; }
+.icon-aegis  { background-position: 100% 0%; }
+
+/* Pixel-Art Winged Aether Jump Dash Icon (Between Ice and Lightning) */
+.spell-icon-dash {
+  width: 44px;
+  height: 44px;
+  margin-top: 4px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' shape-rendering='crispEdges'><rect width='32' height='32' fill='none'/><polygon points='4,18 14,10 14,14 28,6 22,17 28,17 14,27 16,20 4,22' fill='%2300ffcc'/><polygon points='7,17 15,12 15,15 25,9 20,17 25,17 15,24 17,19' fill='%23ffffff'/><rect x='2' y='13' width='5' height='2' fill='%23ffd700'/><rect x='1' y='19' width='6' height='2' fill='%23ffd700'/><rect x='3' y='24' width='5' height='2' fill='%2300bbff'/></svg>");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 204, 0.85));
+}
+
+.mobility-slot.dash-ready {
+  border-color: #00eeff;
+  background: radial-gradient(circle at center, #113238 0%, #09171c 100%);
+  box-shadow: 0 0 10px rgba(0, 238, 255, 0.45), inset 0 0 8px rgba(0, 255, 204, 0.25);
+}
+
+.mobility-slot .spell-cost {
+  color: #00ffcc;
+}
+
+.debug-dash-btn {
+  position: absolute;
+  top: 266px;
+  right: 22px;
+  width: 188px;
+  text-align: center;
+  border: 2px solid #8866aa;
+  color: #dcb8ff;
+  pointer-events: auto;
+  z-index: 16;
+}
+
+.debug-dash-btn.debug-unlocked {
+  background: linear-gradient(180deg, #0e3838 0%, #071c22 100%);
+  border-color: #00ffcc;
+  color: #88ffee;
+  box-shadow: 0 0 12px rgba(0, 255, 204, 0.55);
+}
+
+.spell-name {
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #eeddbb;
+  margin-top: 2px;
+  text-align: center;
+  line-height: 1.05;
+}
+
+.spell-cost {
+  font-size: 9px;
+  color: #66bbff;
+  font-weight: bold;
+}
+
+.cooldown-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0%;
+  background: rgba(0, 10, 18, 0.48);
+  border-top: 1px solid rgba(0, 255, 204, 0.55);
+  pointer-events: none;
+  transition: height 0.05s linear;
+  z-index: 4;
+}
+
+.spell-slot.locked {
+  background: #0b0908;
+  border-color: #2b2218;
+  opacity: 0.78;
+}
+
+.spell-slot.locked .spell-icon-gfx,
+.spell-slot.locked .spell-icon-dash,
+.spell-slot.locked .spell-name,
+.spell-slot.locked .spell-cost {
+  filter: grayscale(100%) brightness(0.42);
+}
+
+.spell-lock-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(14, 10, 7, 0.95);
+  border: 1px solid #b58834;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 900;
+  color: #ffd766;
+  white-space: nowrap;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+}
+
+.spell-slot:not(.locked) .spell-lock-badge {
+  display: none;
+}
+
+/* --- MODAL DIALOGS --- */
+.modal-dialog {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.modal-content {
+  padding: 30px 40px;
+  max-width: 560px;
+  text-align: center;
+}
+
+.modal-content h2 {
+  font-family: 'Cinzel', serif;
+  color: #ffcc66;
+  font-size: 21px;
+  margin-bottom: 18px;
+  letter-spacing: 1.5px;
+}
+
+.controls-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 24px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #443320;
+}
+
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13.5px;
+}
+
+.control-row span { color: #aa9988; }
+.control-row b { color: #ffdd88; }
+
+.modal-close-btn {
+  background: #8b2525;
+  border: 2px solid #ffd766;
+  color: #ffffff;
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 11px 28px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(255, 68, 68, 0.4);
+}
+
+.modal-close-btn:hover {
+  background: #bb3535;
+  transform: translateY(-2px);
+}
+
+.victory-title {
+  font-family: 'Cinzel', serif;
+  color: #ffd700;
+  font-size: 30px;
+  margin-bottom: 14px;
+  text-shadow: 0 0 15px #ffd700;
+}
+
+.victory-stats {
+  margin: 18px 0;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #eeddcc;
+}
+
+.game-over-title {
+  font-family: 'Cinzel', serif;
+  color: #ff2222;
+  font-size: 30px;
+  margin-bottom: 14px;
+  text-shadow: 0 0 15px #ff0000;
+}
+
+/* --- INSTRUCTION BANNER ON START --- */
+.start-prompt {
+  position: absolute;
+  bottom: 145px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(12, 10, 8, 0.88);
+  border: 2px solid #cc9944;
+  padding: 6px 18px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 12.5px;
+  color: #ffddaa;
+  pointer-events: none;
+  animation: pulsePrompt 2s infinite ease-in-out;
+}
+
+@keyframes pulsePrompt {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1.0; }
+}
+
+/* --- BADGE, COMBO, SYNERGY & AUTOMAP --- */
+.argon-badge {
+  background: linear-gradient(90deg, #8b1e1e, #cc8822);
+  border: 1px solid #ffd766;
+  color: #ffffff;
+  font-size: 8.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.combo-box {
+  font-family: 'Cinzel', serif;
+  font-size: 13.5px;
+  font-weight: 900;
+  color: #ffaa22;
+  background: rgba(35, 18, 6, 0.92);
+  border: 1px solid #ff8800;
+  border-radius: 5px;
+  padding: 5px 12px;
+  text-shadow: 0 0 8px rgba(255, 136, 0, 0.8);
+}
+
+.synergy-banner {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 900;
+  color: #55ffff;
+  background: rgba(8, 28, 42, 0.94);
+  border: 2px solid #00eeff;
+  border-radius: 6px;
+  padding: 6px 14px;
+  text-shadow: 0 0 10px #00ffff;
+}
+
+.minimap-wrap {
+  position: absolute;
+  top: 62px;
+  right: 22px;
+  padding: 7px;
+  pointer-events: auto;
+}
+
+.minimap-header {
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 900;
+  color: #ffd766;
+  text-align: center;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+#minimap-canvas {
+  display: block;
+  border: 1px solid #4a3820;
+  border-radius: 3px;
+}
+
+/* --- MULTI-STAGE NAVIGATION BAR & PROCEDURAL REROLL --- */
+.stage-nav-bar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 5px 7px;
+  pointer-events: auto;
+}
+
+.stage-nav-btn {
+  background: #18141c;
+  border: 1px solid #5a462c;
+  color: #ccbb99;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.stage-nav-btn:hover {
+  border-color: #ffaa44;
+  color: #ffffff;
+}
+
+.stage-nav-btn.active {
+  background: linear-gradient(135deg, #422610, #773e14);
+  border-color: #ffd700;
+  color: #ffd766;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.45);
+}
+
+.stage-reroll-btn {
+  background: linear-gradient(135deg, #123322, #1f5538);
+  border: 1px solid #44dd88;
+  color: #aaffcc;
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 4px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.stage-reroll-btn:hover {
+  background: linear-gradient(135deg, #1b4d33, #2b774e);
+  border-color: #88ffbb;
+  color: #ffffff;
+}
+
+.portal-prompt {
+  position: absolute;
+  bottom: 142px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(12, 22, 38, 0.94);
+  border: 2px solid #00eeff;
+  color: #88ffff;
+  font-family: 'Cinzel', serif;
+  font-size: 12.5px;
+  font-weight: 900;
+  padding: 7px 18px;
+  border-radius: 6px;
+  box-shadow: 0 0 20px rgba(0, 238, 255, 0.55);
+  pointer-events: none;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}

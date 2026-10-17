@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sanctum of the Crimson Spire</title>
+  <meta name="description" content="Sanctum of the Crimson Spire: Retro first-person dark fantasy wizard RPG.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><polygon points='32,4 58,32 32,60 6,32' fill='%23cc2233' stroke='%23ffd700' stroke-width='4'/><polygon points='32,14 48,32 32,50 16,32' fill='%23ffaa22'/></svg>">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <!-- Retro RPG Title & Game Start Screen -->
+  <div id="loading-screen" class="start-screen-overlay">
+    <div class="start-screen-frame">
+      <div class="frame-corner tl"></div>
+      <div class="frame-corner tr"></div>
+      <div class="frame-corner bl"></div>
+      <div class="frame-corner br"></div>
+
+      <!-- Generated Game Logo & Key Art Banner -->
+      <div class="title-logo-viewport">
+        <img src="/assets/game_title_logo.jpg" alt="Sanctum of the Crimson Spire" class="title-logo-img" />
+        <div class="title-logo-vignette"></div>
+      </div>
+
+      <div class="start-screen-body">
+        <div id="loading-bar-wrap" class="loading-bar-shell">
+          <div id="loading-bar" class="loading-bar-fill"></div>
+        </div>
+        <div id="loading-text" class="loading-status-text">Awakening the Sanctum...</div>
+
+        <button id="btn-start" class="start-game-btn hidden">
+          ENTER THE CRIMSON SPIRE
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start Prompt Guide -->
+  <div id="start-guide" class="start-prompt hidden">
+    Walk up the Castle Stairs into a Glowing Stage Portal, or select a Stage on the top bar.
+  </div>
+
+  <!-- Three.js Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Main Game Entry -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
