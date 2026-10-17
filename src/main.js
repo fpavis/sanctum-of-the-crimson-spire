@@ -9,6 +9,9 @@ import { CastleLevel } from './world/CastleLevel.js';
 import { EnemyManager } from './entities/EnemyManager.js';
 import { HUD } from './ui/HUD.js';
 
+// Base path differs on GitHub Pages (project subpath) vs. local dev
+const BASE_URL = import.meta.env.BASE_URL;
+
 class GameApp {
   constructor() {
     this.container = document.getElementById('canvas-container');
@@ -72,7 +75,7 @@ class GameApp {
       {
         id: 'hands',
         type: 'chroma',
-        url: '/assets/wizard_hands_cast.jpg',
+        url: BASE_URL + 'assets/wizard_hands_cast.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -89,7 +92,7 @@ class GameApp {
       {
         id: 'staff',
         type: 'chroma',
-        url: '/assets/wizard_staff_cast.jpg',
+        url: BASE_URL + 'assets/wizard_staff_cast.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -108,7 +111,7 @@ class GameApp {
       {
         id: 'gargoyle',
         type: 'chroma',
-        url: '/assets/gargoyle_enemy.jpg',
+        url: BASE_URL + 'assets/gargoyle_enemy.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -126,7 +129,7 @@ class GameApp {
       {
         id: 'skeleton',
         type: 'chroma',
-        url: '/assets/skeleton_sorcerer.jpg',
+        url: BASE_URL + 'assets/skeleton_sorcerer.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -144,7 +147,7 @@ class GameApp {
       {
         id: 'fireImp',
         type: 'chroma',
-        url: '/assets/fire_imp_enemy.jpg',
+        url: BASE_URL + 'assets/fire_imp_enemy.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -162,7 +165,7 @@ class GameApp {
       {
         id: 'frostWraith',
         type: 'chroma',
-        url: '/assets/frost_wraith_enemy.jpg',
+        url: BASE_URL + 'assets/frost_wraith_enemy.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -180,7 +183,7 @@ class GameApp {
       {
         id: 'dreadKnight',
         type: 'chroma',
-        url: '/assets/dread_knight_enemy.jpg',
+        url: BASE_URL + 'assets/dread_knight_enemy.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -198,7 +201,7 @@ class GameApp {
       {
         id: 'arcaneEye',
         type: 'chroma',
-        url: '/assets/arcane_eye_enemy.jpg',
+        url: BASE_URL + 'assets/arcane_eye_enemy.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -216,13 +219,13 @@ class GameApp {
       {
         id: 'props',
         type: 'chroma',
-        url: '/assets/pickups_and_props.jpg',
+        url: BASE_URL + 'assets/pickups_and_props.jpg',
         options: { cols: 4, rows: 1, alignBottom: false, padding: 0.08 }
       },
       {
         id: 'decor',
         type: 'chroma',
-        url: '/assets/dungeon_decor_props.jpg',
+        url: BASE_URL + 'assets/dungeon_decor_props.jpg',
         options: {
           cols: 4,
           rows: 1,
@@ -239,36 +242,36 @@ class GameApp {
       {
         id: 'spellIcons',
         type: 'chroma',
-        url: '/assets/spell_icons_sheet.jpg',
+        url: BASE_URL + 'assets/spell_icons_sheet.jpg',
         options: { cols: 4, rows: 1, alignBottom: false, padding: 0.04 }
       },
       {
         id: 'projectiles',
         type: 'chroma',
-        url: '/assets/spell_projectiles.jpg',
+        url: BASE_URL + 'assets/spell_projectiles.jpg',
         options: { cols: 4, rows: 1, alignBottom: false, padding: 0.06 }
       },
       {
         id: 'cauldron',
         type: 'chroma',
-        url: '/assets/alchemy_cauldron.jpg',
+        url: BASE_URL + 'assets/alchemy_cauldron.jpg',
         options: { cols: 2, rows: 2, alignBottom: true, padding: 0.04 }
       },
       {
         id: 'portal',
         type: 'chroma',
-        url: '/assets/magic_portal_vortex.jpg',
+        url: BASE_URL + 'assets/magic_portal_vortex.jpg',
         options: { cols: 4, rows: 4, alignBottom: false, stripFrameLabels: true, stripBorderLines: true, padding: 0.05 }
       },
 
       // PBR Texture Sets (Including Diverse Biome Walls & Floors)
-      { id: 'wall', type: 'pbr', url: '/assets/castle_stone_wall.jpg', params: { normalStrength: 2.2, repeatX: 4, repeatY: 2 } },
-      { id: 'lavaWall', type: 'pbr', url: '/assets/biome_lava_wall.jpg', params: { normalStrength: 2.5, repeatX: 4, repeatY: 2 } },
-      { id: 'iceWall', type: 'pbr', url: '/assets/biome_ice_wall.jpg', params: { normalStrength: 2.2, repeatX: 4, repeatY: 2 } },
-      { id: 'sanctumWall', type: 'pbr', url: '/assets/biome_sanctum_wall.jpg', params: { normalStrength: 2.2, repeatX: 4, repeatY: 2 } },
-      { id: 'floor', type: 'pbr', url: '/assets/castle_floor_tiles.jpg', params: { normalStrength: 2.5, repeatX: 6, repeatY: 6 } },
-      { id: 'door', type: 'pbr', url: '/assets/castle_door_pbr.jpg', params: { normalStrength: 2.0, repeatX: 1, repeatY: 1 } },
-      { id: 'stainedGlass', type: 'pbr', url: '/assets/castle_stained_glass.jpg', params: { normalStrength: 1.0, repeatX: 1, repeatY: 1 } }
+      { id: 'wall', type: 'pbr', url: BASE_URL + 'assets/castle_stone_wall.jpg', params: { normalStrength: 2.2, repeatX: 4, repeatY: 2 } },
+      { id: 'lavaWall', type: 'pbr', url: BASE_URL + 'assets/biome_lava_wall.jpg', params: { normalStrength: 2.5, repeatX: 4, repeatY: 2 } },
+      { id: 'iceWall', type: 'pbr', url: BASE_URL + 'assets/biome_ice_wall.jpg', params: { normalStrength: 2.2, repeatX: 4, repeatY: 2 } },
+      { id: 'sanctumWall', type: 'pbr', url: BASE_URL + 'assets/biome_sanctum_wall.jpg', params: { normalStrength: 2.2, repeatX: 4, repeatY: 2 } },
+      { id: 'floor', type: 'pbr', url: BASE_URL + 'assets/castle_floor_tiles.jpg', params: { normalStrength: 2.5, repeatX: 6, repeatY: 6 } },
+      { id: 'door', type: 'pbr', url: BASE_URL + 'assets/castle_door_pbr.jpg', params: { normalStrength: 2.0, repeatX: 1, repeatY: 1 } },
+      { id: 'stainedGlass', type: 'pbr', url: BASE_URL + 'assets/castle_stained_glass.jpg', params: { normalStrength: 1.0, repeatX: 1, repeatY: 1 } }
     ];
 
     let loadedCount = 0;
