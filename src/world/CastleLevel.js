@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AnimatedBillboardSprite } from '../engine/SpriteAnimator.js';
+import { ChromaKeyProcessor } from '../engine/ChromaKeyProcessor.js';
 import { audioSynth } from '../engine/AudioSynthesizer.js';
 import { ProceduralDungeonGenerator } from './ProceduralDungeonGenerator.js';
 
@@ -318,11 +319,13 @@ export class CastleLevel {
       metalness: 0.82
     });
 
-    // Shared Torch Sconce Material (Frame 3 of normalized pickups_and_props)
+    // Shared Torch Sconce Material & 8-Frame Animated Flame Materials (Frame 3 of normalized pickups_and_props)
     this.sharedTorchTex = this.spriteTextures.props.clone();
     this.sharedTorchTex.needsUpdate = true;
-    this.sharedTorchTex.repeat.set(1 / 4, 1);
-    this.sharedTorchTex.offset.set(3 / 4, 0);
+    this.sharedTorchTex.wrapS = THREE.ClampToEdgeWrapping;
+    this.sharedTorchTex.wrapT = THREE.ClampToEdgeWrapping;
+    this.sharedTorchTex.repeat.set(0.96 / 4, 0.96);
+    this.sharedTorchTex.offset.set((3 + 0.02) / 4, 0.02);
 
     this.sharedTorchMat = new THREE.MeshBasicMaterial({
       map: this.sharedTorchTex,
@@ -332,14 +335,30 @@ export class CastleLevel {
     });
     this.sharedTorchGeo = new THREE.PlaneGeometry(0.95, 0.95);
 
+    this.torchAnimMaterials = ChromaKeyProcessor.createAnimatedFireMaterials(
+      this.spriteTextures.props,
+      3,
+      4,
+      'torch'
+    );
+    this.brazierAnimMaterials = ChromaKeyProcessor.createAnimatedFireMaterials(
+      this.spriteTextures.decor || this.spriteTextures.props,
+      0,
+      4,
+      'brazier'
+    );
+
     // Pre-create 4 Decorative Dungeon Prop Materials from dungeon_decor_props.jpg
     // 0: Brazier, 1: Bookshelf, 2: Skull Altar, 3: Hanging Banner
+    // Inset UVs slightly inside each cell so neighboring cells can never bleed across boundaries
     this.decorMaterials = [0, 1, 2, 3].map((frameIdx) => {
       const baseTex = this.spriteTextures.decor || this.spriteTextures.props;
       const tex = baseTex.clone();
       tex.needsUpdate = true;
-      tex.repeat.set(1 / 4, 1);
-      tex.offset.set(frameIdx / 4, 0);
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.repeat.set(0.96 / 4, 0.96);
+      tex.offset.set((frameIdx + 0.02) / 4, 0.02);
       return new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
@@ -459,7 +478,18 @@ export class CastleLevel {
 
   // --- HELPER BUILDERS ---
 
-  createWall(x, yBottom, z, width, depth, height = 6.5, isCollider = true, extraTopCollider = 12.0, matOverride = null) {
+  createWall(
+    x,
+    yBottom,
+    z,
+    width,
+    depth,
+    height = 6.5,
+    isCollider = true,
+    extraTopCollider = 12.0,
+    matOverride = null,
+    extraBottomCollider = 4.0
+  ) {
     const geo = this.createTiledBoxGeometry(width, height, depth, 3.4);
     const mesh = new THREE.Mesh(geo, matOverride || this.activeWallMat);
     mesh.position.set(x, yBottom + height / 2, z);
@@ -467,8 +497,8 @@ export class CastleLevel {
     if (isCollider) {
       mesh.geometry.computeBoundingBox();
       mesh.boundingBox = new THREE.Box3().setFromObject(mesh);
-      // Extend collider downward into foundation and upward so player can never jump/dash over perimeter walls
-      mesh.boundingBox.min.y -= 4.0;
+      // Extend collider downward into foundation (unless overhead lintel) and upward so player can never jump/dash over perimeter walls
+      mesh.boundingBox.min.y -= extraBottomCollider;
       mesh.boundingBox.max.y += extraTopCollider;
       this.walls.push(mesh);
     }
@@ -527,14 +557,14 @@ export class CastleLevel {
     return collider;
   }
 
-  createPlatformBlock(x, yTop, z, width, depth, thickness = 2.0, addSideCollider = true) {
+  createPlatformBlock(x, yTop, z, width, depth, thickness = 2.0, addSideCollider = false) {
     const geo = this.createTiledBoxGeometry(width, thickness, depth, 3.2);
     const mesh = new THREE.Mesh(geo, this.getPlatformMaterials());
     mesh.position.set(x, yTop - thickness / 2, z);
     this.stageGroup.add(mesh);
 
     if (addSideCollider && thickness > 0.35) {
-      // Solid under-ledge collider up to yTop - 0.14 so players at lower elevations cannot walk through platform sides
+      // Solid under-ledge collider up to yTop - 0.14 so players at lower elevations cannot walk through interior raised platform sides
       this.createInvisibleColliderBox(x, yTop - thickness, z, width, Math.max(0.2, thickness - 0.14), depth);
     }
 
@@ -1216,7 +1246,7 @@ export class CastleLevel {
       return;
     }
 
-    // Default: 'brazier'
+    // Default: 'brazier' (animated 8-frame roaring firepit)
     const w = 1.45 * scale;
     const h = 1.85 * scale;
     const baseGeo = this.createTiledCylinderGeometry(0.52 * scale, 0.65 * scale, 0.16 * scale, 10, 2.6);
@@ -1224,17 +1254,29 @@ export class CastleLevel {
     baseMesh.position.set(x, yBottom + 0.08 * scale, z);
     this.stageGroup.add(baseMesh);
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    const brazierFrames = this.brazierAnimMaterials && this.brazierAnimMaterials.length > 0 ? this.brazierAnimMaterials : [mat];
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), brazierFrames[0]);
     mesh.position.set(x, yBottom + 0.10 * scale + h * 0.5, z);
     this.stageGroup.add(mesh);
-    this.torchSprites.push(mesh);
+    this.torchSprites.push({
+      mesh,
+      frames: brazierFrames,
+      fps: 10.5,
+      seed: Math.random() * 25
+    });
   }
 
   createTorchSprite(x, y, z) {
-    const spriteMesh = new THREE.Mesh(this.sharedTorchGeo, this.sharedTorchMat);
+    const torchFrames = this.torchAnimMaterials && this.torchAnimMaterials.length > 0 ? this.torchAnimMaterials : [this.sharedTorchMat];
+    const spriteMesh = new THREE.Mesh(this.sharedTorchGeo, torchFrames[0]);
     spriteMesh.position.set(x, y, z);
     this.stageGroup.add(spriteMesh);
-    this.torchSprites.push(spriteMesh);
+    this.torchSprites.push({
+      mesh: spriteMesh,
+      frames: torchFrames,
+      fps: 11.5,
+      seed: Math.random() * 25
+    });
   }
 
   createRoomLight(x, y, z, color, intensity = 4.5, dist = 26) {
@@ -1311,7 +1353,7 @@ export class CastleLevel {
     const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.95), signMat);
     signMesh.position.set(x, yBottom + 4.95, z);
     this.stageGroup.add(signMesh);
-    this.torchSprites.push(signMesh);
+    this.torchSprites.push({ mesh: signMesh, frames: null });
 
     this.portals.push({
       position: new THREE.Vector3(x, yBottom + 1.5, z),
@@ -1395,8 +1437,10 @@ export class CastleLevel {
     const frame = type === 'health' ? 0 : type === 'mana' ? 1 : 2;
     const tex = this.spriteTextures.props.clone();
     tex.needsUpdate = true;
-    tex.repeat.set(1 / 4, 1);
-    tex.offset.set(frame / 4, 0);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(0.96 / 4, 0.96);
+    tex.offset.set((frame + 0.02) / 4, 0.02);
 
     const mat = new THREE.MeshBasicMaterial({
       map: tex,
@@ -1578,16 +1622,14 @@ export class CastleLevel {
       } else {
         const segW = (w - doorW) / 2;
         if (biome.openSky) {
-          this.createCrenellatedWall(x - doorW / 2 - segW / 2, y, zWall, segW + 0.5, 1.0, wallH, 0.9);
-          this.createCrenellatedWall(x + doorW / 2 + segW / 2, y, zWall, segW + 0.5, 1.0, wallH, 0.9);
+          this.createCrenellatedWall(x - doorW / 2 - segW / 2 - 0.25, y, zWall, segW + 0.5, 1.0, wallH, 0.9);
+          this.createCrenellatedWall(x + doorW / 2 + segW / 2 + 0.25, y, zWall, segW + 0.5, 1.0, wallH, 0.9);
         } else {
-          this.createWall(x - doorW / 2 - segW / 2, y - 5.0, zWall, segW + 0.5, 1.0, wallH + 5.0, true, 12.0);
-          this.createWall(x + doorW / 2 + segW / 2, y - 5.0, zWall, segW + 0.5, 1.0, wallH + 5.0, true, 12.0);
+          this.createWall(x - doorW / 2 - segW / 2 - 0.25, y - 5.0, zWall, segW + 0.5, 1.0, wallH + 5.0, true, 12.0);
+          this.createWall(x + doorW / 2 + segW / 2 + 0.25, y - 5.0, zWall, segW + 0.5, 1.0, wallH + 5.0, true, 12.0);
         }
-        // Solid overhead doorway lintel collider (prevents jumping over doorway walls via jump pads)
-        this.createWall(x, y + doorH, zWall, doorW + 0.4, 1.0, Math.max(1.2, wallH - doorH), true, 12.0);
-        // Solid under-doorway foundation collider (prevents walking under doorway from sunken chasm basins)
-        this.createInvisibleColliderBox(x, y - 8.0, zWall, doorW + 0.6, 7.92, 1.1);
+        // Overhead doorway lintel with extraBottomCollider = 0.0 so the 5.8m x 5.4m doorway opening is 100% clear!
+        this.createWall(x, y + doorH, zWall, doorW + 0.4, 1.0, Math.max(1.2, wallH - doorH), true, 12.0, null, 0.0);
         this.createDoorwayArchFrame(x, y, zWall, doorW, doorH, 'Z', biome.trimColor);
       }
     };
@@ -1612,14 +1654,14 @@ export class CastleLevel {
       } else {
         const segD = (d - doorW) / 2;
         if (biome.openSky) {
-          this.createCrenellatedWall(xWall, y, z - doorW / 2 - segD / 2, 1.0, segD + 0.5, wallH, 0.9);
-          this.createCrenellatedWall(xWall, y, z + doorW / 2 + segD / 2, 1.0, segD + 0.5, wallH, 0.9);
+          this.createCrenellatedWall(xWall, y, z - doorW / 2 - segD / 2 - 0.25, 1.0, segD + 0.5, wallH, 0.9);
+          this.createCrenellatedWall(xWall, y, z + doorW / 2 + segD / 2 + 0.25, 1.0, segD + 0.5, wallH, 0.9);
         } else {
-          this.createWall(xWall, y - 5.0, z - doorW / 2 - segD / 2, 1.0, segD + 0.5, wallH + 5.0, true, 12.0);
-          this.createWall(xWall, y - 5.0, z + doorW / 2 + segD / 2, 1.0, segD + 0.5, wallH + 5.0, true, 12.0);
+          this.createWall(xWall, y - 5.0, z - doorW / 2 - segD / 2 - 0.25, 1.0, segD + 0.5, wallH + 5.0, true, 12.0);
+          this.createWall(xWall, y - 5.0, z + doorW / 2 + segD / 2 + 0.25, 1.0, segD + 0.5, wallH + 5.0, true, 12.0);
         }
-        this.createWall(xWall, y + doorH, z, 1.0, doorW + 0.4, Math.max(1.2, wallH - doorH), true, 12.0);
-        this.createInvisibleColliderBox(xWall, y - 8.0, z, 1.1, 7.92, doorW + 0.6);
+        // Overhead doorway lintel with extraBottomCollider = 0.0 so the 5.8m x 5.4m doorway opening is 100% clear!
+        this.createWall(xWall, y + doorH, z, 1.0, doorW + 0.4, Math.max(1.2, wallH - doorH), true, 12.0, null, 0.0);
         this.createDoorwayArchFrame(xWall, y, z, doorW, doorH, 'X', biome.trimColor);
       }
     };
@@ -1780,7 +1822,7 @@ export class CastleLevel {
       enemyList.push({ type: 'fire_imp', x: X(-3.8), y, z: Z(1.2) });
       enemyList.push({ type: 'dread_knight', x: X(3.8), y, z: Z(1.2) });
     } else if (archetype === 'OBSIDIAN_ANVIL_FOUNDRY') {
-      this.createPlatformBlock(x, y + 0.55, z, 6.2, 6.2, 0.55);
+      this.createPlatformBlock(x, y + 0.55, z, 6.2, 6.2, 0.55, true);
       this.createForgeFurnaceAndAnvil(x, y + 0.55, Z(-0.8), 0);
       this.createColumn(X(-5.2), y, Z(-4.2), 0.65, colH);
       this.createColumn(X(5.2), y, Z(-4.2), 0.65, colH);
@@ -1881,7 +1923,7 @@ export class CastleLevel {
       enemyList.push({ type: 'frost_wraith', x: X(-3.4), y, z: Z(1.2) });
       enemyList.push({ type: 'frost_wraith', x: X(3.4), y, z: Z(-1.2) });
     } else if (archetype === 'CRYOFROST_MONOLITH_SHRINE') {
-      this.createPlatformBlock(x, y + 0.6, z, 5.6, 5.6, 0.6);
+      this.createPlatformBlock(x, y + 0.6, z, 5.6, 5.6, 0.6, true);
       this.createAstralOrrery(x, y + 0.6, z, 0x00eeff);
       this.createIceCrystalCluster(X(-4.6), y, Z(-3.2), 1.0, 0x00eeff);
       this.createIceCrystalCluster(X(4.6), y, Z(-3.2), 1.0, 0x00eeff);
@@ -2026,19 +2068,24 @@ export class CastleLevel {
         const PX = (dx) => node.x + dx * sx;
         const PZ = (dz) => node.z + dz * sz;
 
-        // Solid stone doorway landing balconies with side colliders (addSideCollider = true)
+        // Solid stone doorway landing balconies: sunken-chasm colliders are inset away from the doorway wall
+        // and stop 0.6m below node.y so doorway/hallway thresholds are 100% clear while the -2.2m basin is blocked
         if (node.doors.south) {
-          this.createPlatformBlock(node.x, node.y, node.z + node.d / 2 - 3.0, 7.4, 6.0, 3.2, true);
+          this.createPlatformBlock(node.x, node.y, node.z + node.d / 2 - 3.0, 7.4, 6.0, 3.2, false);
+          this.createInvisibleColliderBox(node.x, node.y - 3.2, node.z + node.d / 2 - 3.4, 7.2, 2.6, 4.8);
           this.createJumpPad(node.x - 2.4, node.y, node.z + node.d / 2 - 3.0, 11.8, biome.trimColor);
         }
         if (node.doors.north) {
-          this.createPlatformBlock(node.x, node.y, node.z - node.d / 2 + 3.0, 7.4, 6.0, 3.2, true);
+          this.createPlatformBlock(node.x, node.y, node.z - node.d / 2 + 3.0, 7.4, 6.0, 3.2, false);
+          this.createInvisibleColliderBox(node.x, node.y - 3.2, node.z - node.d / 2 + 3.4, 7.2, 2.6, 4.8);
         }
         if (node.doors.west) {
-          this.createPlatformBlock(node.x - node.w / 2 + 3.0, node.y, node.z, 6.0, 7.4, 3.2, true);
+          this.createPlatformBlock(node.x - node.w / 2 + 3.0, node.y, node.z, 6.0, 7.4, 3.2, false);
+          this.createInvisibleColliderBox(node.x - node.w / 2 + 3.4, node.y - 3.2, node.z, 4.8, 2.6, 7.2);
         }
         if (node.doors.east) {
-          this.createPlatformBlock(node.x + node.w / 2 - 3.0, node.y, node.z, 6.0, 7.4, 3.2, true);
+          this.createPlatformBlock(node.x + node.w / 2 - 3.0, node.y, node.z, 6.0, 7.4, 3.2, false);
+          this.createInvisibleColliderBox(node.x + node.w / 2 - 3.4, node.y - 3.2, node.z, 4.8, 2.6, 7.2);
         }
 
         // Procedurally Selected 3D Stepping-Stone Platforms bridging the Chasm Room
@@ -2178,15 +2225,15 @@ export class CastleLevel {
     // Helper to build a North/South terrace parapet wall with a central staircase opening (width 7.0)
     const buildTerraceZParapet = (y, zWall, totalW = 24, openW = 7.0, wallH = 3.8) => {
       const segW = (totalW - openW) / 2;
-      this.createCrenellatedWall(-openW / 2 - segW / 2, y, zWall, segW + 0.4, 1.0, wallH, 0.85);
-      this.createCrenellatedWall(openW / 2 + segW / 2, y, zWall, segW + 0.4, 1.0, wallH, 0.85);
+      this.createCrenellatedWall(-openW / 2 - segW / 2 - 0.2, y, zWall, segW + 0.4, 1.0, wallH, 0.85);
+      this.createCrenellatedWall(openW / 2 + segW / 2 + 0.2, y, zWall, segW + 0.4, 1.0, wallH, 0.85);
     };
 
     // Helper to build an East/West terrace wall with a central side-path gateway (depth 5.2)
     const buildTerraceXGatewayWall = (xWall, y, zCenter, totalD = 10, openD = 5.2, wallH = 4.2, trimCol = 0x00eeff) => {
       const segD = (totalD - openD) / 2;
-      this.createCrenellatedWall(xWall, y, zCenter - openD / 2 - segD / 2, 1.0, segD + 0.4, wallH, 0.85);
-      this.createCrenellatedWall(xWall, y, zCenter + openD / 2 + segD / 2, 1.0, segD + 0.4, wallH, 0.85);
+      this.createCrenellatedWall(xWall, y, zCenter - openD / 2 - segD / 2 - 0.2, 1.0, segD + 0.4, wallH, 0.85);
+      this.createCrenellatedWall(xWall, y, zCenter + openD / 2 + segD / 2 + 0.2, 1.0, segD + 0.4, wallH, 0.85);
       this.createDoorwayArchFrame(xWall, y, zCenter, openD, 4.8, 'X', trimCol);
     };
 
@@ -2534,7 +2581,10 @@ export class CastleLevel {
     // Central Citadel Nave (36x46) + Elevated North Boss Dais (20x18)
     this.createPlatformBlock(0, 0.0, -5, 36, 46, 5.0);
     this.createStaircaseZ(0, -4, -10, 0.0, 2.0, 8.0, 10);
-    this.createPlatformBlock(0, 2.0, -19, 20, 18, 5.0, true);
+    this.createPlatformBlock(0, 2.0, -19, 20, 18, 5.0, false);
+    // Flank ledge colliders on West & East sides of the North Dais (leaving the central 8m staircase completely open)
+    this.createInvisibleColliderBox(-7.1, 0.0, -19, 5.8, 1.85, 18.0);
+    this.createInvisibleColliderBox(7.1, 0.0, -19, 5.8, 1.85, 18.0);
 
     // West & East Astral Reliquary Side Galleries (x = -30..-18 and x = 18..30, z = -12..4)
     this.createPlatformBlock(-24, 0.0, -4, 12, 16, 5.0);
@@ -2673,7 +2723,15 @@ export class CastleLevel {
     }
 
     for (let i = 0; i < this.torchSprites.length; i++) {
-      this.torchSprites[i].lookAt(player.camera.position.x, this.torchSprites[i].position.y, player.camera.position.z);
+      const ts = this.torchSprites[i];
+      const mesh = ts.mesh || ts;
+      mesh.lookAt(player.camera.position.x, mesh.position.y, player.camera.position.z);
+      if (ts.frames && ts.frames.length > 1) {
+        const frameIdx = Math.floor(time * (ts.fps || 10) + (ts.seed || 0)) % ts.frames.length;
+        if (mesh.material !== ts.frames[frameIdx]) {
+          mesh.material = ts.frames[frameIdx];
+        }
+      }
     }
 
     for (let i = 0; i < this.animatedSprites.length; i++) {

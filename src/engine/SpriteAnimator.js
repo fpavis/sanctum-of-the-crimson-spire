@@ -29,7 +29,13 @@ export class AnimatedBillboardSprite {
     // Clone texture wrapper (shares underlying GPU image buffer without re-uploading!)
     this.texture = baseTexture.clone();
     this.texture.needsUpdate = true;
-    this.texture.repeat.set(1 / this.config.cols, 1 / this.config.rows);
+    this.texture.wrapS = THREE.ClampToEdgeWrapping;
+    this.texture.wrapT = THREE.ClampToEdgeWrapping;
+    this.cellInset = 0.015;
+    this.texture.repeat.set(
+      (1 - this.cellInset * 2) / this.config.cols,
+      (1 - this.cellInset * 2) / this.config.rows
+    );
 
     this.uniforms = {
       uHitFlash: { value: 0.0 }
@@ -78,12 +84,13 @@ export class AnimatedBillboardSprite {
   setFrame(frameNumber) {
     const cols = this.config.cols;
     const rows = this.config.rows;
+    const inset = this.cellInset || 0.015;
 
     const col = frameNumber % cols;
     const row = Math.floor(frameNumber / cols);
 
-    const u = col / cols;
-    const v = (rows - 1 - row) / rows;
+    const u = (col + inset) / cols;
+    const v = (rows - 1 - row + inset) / rows;
 
     this.texture.offset.set(u, v);
   }

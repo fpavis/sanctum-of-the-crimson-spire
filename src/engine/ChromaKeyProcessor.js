@@ -233,26 +233,101 @@ export class ChromaKeyProcessor {
           const row = Math.floor(f / cols);
 
           let rx0, ry0, rx1, ry1;
+          let excludeRects = null;
           if (customRegions && customRegions[f]) {
             rx0 = Math.floor(customRegions[f].x0 * srcW);
             ry0 = Math.floor(customRegions[f].y0 * srcH);
             rx1 = Math.floor(customRegions[f].x1 * srcW);
             ry1 = Math.floor(customRegions[f].y1 * srcH);
+            excludeRects = customRegions[f].excludeRects || null;
           } else {
-            rx0 = Math.floor((col / cols) * srcW) + 2;
-            ry0 = Math.floor((row / rows) * srcH) + 2;
-            rx1 = Math.floor(((col + 1) / cols) * srcW) - 2;
-            ry1 = Math.floor(((row + 1) / rows) * srcH) - 2;
+            rx0 = Math.floor((col / cols) * srcW) + 4;
+            ry0 = Math.floor((row / rows) * srcH) + 4;
+            rx1 = Math.floor(((col + 1) / cols) * srcW) - 4;
+            ry1 = Math.floor(((row + 1) / rows) * srcH) - 4;
           }
 
-          // Find tight bounding box of non-transparent pixels inside [rx0..rx1, ry0..ry1]
+          const sliceW = Math.max(1, rx1 - rx0);
+          const sliceH = Math.max(1, ry1 - ry0);
+          const mask = new Uint8Array(sliceW * sliceH);
+          let totalOpaque = 0;
+
+          for (let y = ry0; y < ry1; y++) {
+            const ny = y / srcH;
+            for (let x = rx0; x < rx1; x++) {
+              const nx = x / srcW;
+              if (excludeRects) {
+                let excluded = false;
+                for (let er = 0; er < excludeRects.length; er++) {
+                  const r = excludeRects[er];
+                  if (nx >= r.x0 && nx <= r.x1 && ny >= r.y0 && ny <= r.y1) {
+                    excluded = true;
+                    break;
+                  }
+                }
+                if (excluded) continue;
+              }
+              const a = data[(y * srcW + x) * 4 + 3];
+              if (a > 25) {
+                mask[(y - ry0) * sliceW + (x - rx0)] = 1;
+                totalOpaque++;
+              }
+            }
+          }
+
+          if (totalOpaque === 0) continue;
+
+          // Strip any disconnected neighbor sprite bleed islands touching the left (lx = 0) or right (lx = sliceW - 1) border
+          const visited = new Uint8Array(sliceW * sliceH);
+          const queue = new Int32Array(sliceW * sliceH);
+          for (let ly = 0; ly < sliceH; ly++) {
+            const borderXList = [0, 1, sliceW - 2, sliceW - 1];
+            for (let bi = 0; bi < borderXList.length; bi++) {
+              const bx = borderXList[bi];
+              if (bx < 0 || bx >= sliceW) continue;
+              const startIdx = ly * sliceW + bx;
+              if (mask[startIdx] && !visited[startIdx]) {
+                let head = 0;
+                let tail = 0;
+                queue[tail++] = startIdx;
+                visited[startIdx] = 1;
+                while (head < tail) {
+                  const cur = queue[head++];
+                  const cy = Math.floor(cur / sliceW);
+                  const cx = cur - cy * sliceW;
+                  const neighbors = [
+                    cy > 0 ? cur - sliceW : -1,
+                    cy < sliceH - 1 ? cur + sliceW : -1,
+                    cx > 0 ? cur - 1 : -1,
+                    cx < sliceW - 1 ? cur + 1 : -1
+                  ];
+                  for (let ni = 0; ni < 4; ni++) {
+                    const nIdx = neighbors[ni];
+                    if (nIdx >= 0 && mask[nIdx] && !visited[nIdx]) {
+                      visited[nIdx] = 1;
+                      queue[tail++] = nIdx;
+                    }
+                  }
+                }
+                // If this border-touching island is < 22% of the frame's pixels, it is a neighbor sprite bleeding into the cell!
+                if (tail < totalOpaque * 0.22) {
+                  for (let qi = 0; qi < tail; qi++) {
+                    mask[queue[qi]] = 0;
+                  }
+                }
+              }
+            }
+          }
+
+          // Find tight bounding box of valid masked pixels inside [rx0..rx1, ry0..ry1]
           let minX = rx1, minY = ry1, maxX = rx0, maxY = ry0;
           let foundPixels = false;
 
-          for (let y = ry0; y < ry1; y++) {
-            for (let x = rx0; x < rx1; x++) {
-              const a = data[(y * srcW + x) * 4 + 3];
-              if (a > 25) {
+          for (let ly = 0; ly < sliceH; ly++) {
+            for (let lx = 0; lx < sliceW; lx++) {
+              if (mask[ly * sliceW + lx]) {
+                const x = rx0 + lx;
+                const y = ry0 + ly;
                 if (x < minX) minX = x;
                 if (x > maxX) maxX = x;
                 if (y < minY) minY = y;
@@ -267,7 +342,33 @@ export class ChromaKeyProcessor {
           const bw = Math.max(1, maxX - minX + 1);
           const bh = Math.max(1, maxY - minY + 1);
 
-          const usableSize = cellSize * (1.0 - padding * 2);
+          // Copy ONLY masked pixels of this frame onto an isolated canvas so adjacent sprites can never bleed in
+          const frameCanvas = document.createElement('canvas');
+          frameCanvas.width = bw;
+          frameCanvas.height = bh;
+          const frameCtx = frameCanvas.getContext('2d');
+          const frameImgData = frameCtx.createImageData(bw, bh);
+          const fData = frameImgData.data;
+
+          for (let y = minY; y <= maxY; y++) {
+            const ly = y - ry0;
+            const fy = y - minY;
+            for (let x = minX; x <= maxX; x++) {
+              const lx = x - rx0;
+              if (mask[ly * sliceW + lx]) {
+                const srcIdx = (y * srcW + x) * 4;
+                const dstIdx = (fy * bw + (x - minX)) * 4;
+                fData[dstIdx] = data[srcIdx];
+                fData[dstIdx + 1] = data[srcIdx + 1];
+                fData[dstIdx + 2] = data[srcIdx + 2];
+                fData[dstIdx + 3] = data[srcIdx + 3];
+              }
+            }
+          }
+          frameCtx.putImageData(frameImgData, 0, 0);
+
+          const safePadding = Math.max(padding, 0.05);
+          const usableSize = cellSize * (1.0 - safePadding * 2);
           const destCellX = col * cellSize;
           const destCellY = row * cellSize;
 
@@ -297,10 +398,9 @@ export class ChromaKeyProcessor {
               outCtx.save();
               outCtx.translate(cx, cy);
               outCtx.rotate(Math.PI / 2);
-              // In rotated space (+90 deg): local X is vertical (down), local Y is horizontal (left)
               outCtx.drawImage(
-                srcCanvas,
-                minX, minY, bw, bh,
+                frameCanvas,
+                0, 0, bw, bh,
                 -corpseH * 0.5, -corpseW * 0.5, corpseH, corpseW
               );
               outCtx.restore();
@@ -311,8 +411,8 @@ export class ChromaKeyProcessor {
               const offsetX = destCellX + Math.round((cellSize - corpseW) * 0.5);
               const offsetY = groundY - corpseH;
               outCtx.drawImage(
-                srcCanvas,
-                minX, minY, bw, bh,
+                frameCanvas,
+                0, 0, bw, bh,
                 offsetX, offsetY, corpseW, corpseH
               );
             }
@@ -324,12 +424,12 @@ export class ChromaKeyProcessor {
 
             const offsetX = destCellX + Math.round((cellSize - drawW) * 0.5);
             const offsetY = alignBottom
-              ? destCellY + cellSize - drawH - Math.round(cellSize * padding * 0.5)
+              ? destCellY + cellSize - drawH - Math.round(cellSize * safePadding * 0.5)
               : destCellY + Math.round((cellSize - drawH) * 0.5);
 
             outCtx.drawImage(
-              srcCanvas,
-              minX, minY, bw, bh,
+              frameCanvas,
+              0, 0, bw, bh,
               offsetX, offsetY, drawW, drawH
             );
           }
@@ -338,6 +438,8 @@ export class ChromaKeyProcessor {
         const texture = new THREE.CanvasTexture(outCanvas);
         texture.minFilter = THREE.NearestFilter;
         texture.magFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
         texture.generateMipmaps = false;
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.needsUpdate = true;
@@ -347,6 +449,179 @@ export class ChromaKeyProcessor {
       img.onerror = (err) => reject(new Error(`Failed to load texture at ${url}: ${err}`));
       img.src = url;
     });
+  }
+
+  /**
+   * Generates an 8-frame animated pixel-art fire material sequence from a static Torch or Brazier sprite cell.
+   * Keeps the iron sconce/tripod stationary while animating dancing flame tongues, heat shimmer & rising embers.
+   */
+  static createAnimatedFireMaterials(baseTexture, cellIndex = 0, totalCols = 4, mode = 'torch') {
+    if (!baseTexture || !baseTexture.image) return [];
+    const srcImg = baseTexture.image;
+    const cellW = Math.floor(srcImg.width / totalCols);
+    const cellH = srcImg.height;
+
+    const extractCanvas = document.createElement('canvas');
+    extractCanvas.width = cellW;
+    extractCanvas.height = cellH;
+    const extractCtx = extractCanvas.getContext('2d');
+    extractCtx.drawImage(srcImg, cellIndex * cellW, 0, cellW, cellH, 0, 0, cellW, cellH);
+
+    const srcData = extractCtx.getImageData(0, 0, cellW, cellH).data;
+    const isFlame = new Uint8Array(cellW * cellH);
+
+    let fMinX = cellW, fMaxX = 0, fMinY = cellH, fMaxY = 0;
+    const maxFlameY = Math.floor(cellH * (mode === 'brazier' ? 0.60 : 0.52));
+
+    for (let y = 0; y < cellH; y++) {
+      for (let x = 0; x < cellW; x++) {
+        const idx = y * cellW + x;
+        const i = idx * 4;
+        const r = srcData[i];
+        const g = srcData[i + 1];
+        const b = srcData[i + 2];
+        const a = srcData[i + 3];
+
+        if (a > 25 && y <= maxFlameY && r > 145 && r > b + 40 && (r > 180 || g > 85)) {
+          isFlame[idx] = 1;
+          if (x < fMinX) fMinX = x;
+          if (x > fMaxX) fMaxX = x;
+          if (y < fMinY) fMinY = y;
+          if (y > fMaxY) fMaxY = y;
+        }
+      }
+    }
+
+    if (fMaxY <= fMinY) {
+      fMinX = Math.floor(cellW * 0.25);
+      fMaxX = Math.floor(cellW * 0.75);
+      fMinY = Math.floor(cellH * 0.12);
+      fMaxY = maxFlameY;
+    }
+
+    const fCenterX = (fMinX + fMaxX) * 0.5;
+    const fBaseY = fMaxY;
+    const fHeight = Math.max(12, fBaseY - fMinY);
+    const frameCount = 8;
+    const materials = [];
+
+    for (let f = 0; f < frameCount; f++) {
+      const phase = (f / frameCount) * Math.PI * 2;
+      const fCanvas = document.createElement('canvas');
+      fCanvas.width = cellW;
+      fCanvas.height = cellH;
+      const fCtx = fCanvas.getContext('2d');
+      const outImg = fCtx.createImageData(cellW, cellH);
+      const dst = outImg.data;
+
+      // 1. Copy stationary iron holder / tripod base pixels first (with subtle warm firelight rim pulse)
+      const rimPulse = 1.0 + 0.12 * Math.sin(phase);
+      for (let y = 0; y < cellH; y++) {
+        for (let x = 0; x < cellW; x++) {
+          const idx = y * cellW + x;
+          if (!isFlame[idx]) {
+            const i = idx * 4;
+            if (srcData[i + 3] > 0) {
+              const nearBowlRim = Math.abs(y - fBaseY) < 18 ? rimPulse : 1.0;
+              dst[i] = Math.min(255, Math.round(srcData[i] * nearBowlRim));
+              dst[i + 1] = Math.min(255, Math.round(srcData[i + 1] * (nearBowlRim * 0.96)));
+              dst[i + 2] = srcData[i + 2];
+              dst[i + 3] = srcData[i + 3];
+            }
+          }
+        }
+      }
+
+      // 2. Render dancing pixel-art flame tongues anchored at fBaseY
+      const topReach = Math.max(2, fMinY - 18);
+      for (let dy = topReach; dy <= fBaseY + 2; dy++) {
+        const hFrac = Math.max(0, (fBaseY - dy) / fHeight);
+        for (let dx = Math.max(2, fMinX - 16); dx <= Math.min(cellW - 3, fMaxX + 16); dx++) {
+          const xNorm = (dx - fCenterX) / Math.max(12, (fMaxX - fMinX) * 0.5);
+          // Independent left/center/right tongue stretch + horizontal wave undulation
+          const vStretch =
+            1.0 +
+            0.14 * Math.sin(phase + xNorm * 2.4) +
+            0.07 * Math.cos(phase * 2.0 - xNorm * 3.1);
+          const swayX =
+            Math.pow(hFrac, 1.15) *
+            (5.8 * Math.sin(phase - hFrac * 4.4) + 3.0 * Math.cos(phase * 2.0 + hFrac * 6.2));
+
+          // Quantize to 2px steps for authentic crisp pixel-art motion
+          const srcX = Math.round((dx - swayX) * 0.5) * 2 + (dx & 1);
+          const srcY = Math.round(fBaseY - (fBaseY - dy) / vStretch);
+
+          if (srcX >= 0 && srcX < cellW && srcY >= 0 && srcY < cellH) {
+            const sIdx = srcY * cellW + srcX;
+            if (isFlame[sIdx]) {
+              const si = sIdx * 4;
+              const di = (dy * cellW + dx) * 4;
+              // Do not overwrite opaque iron grate bars in front of the brazier flame
+              if (dst[di + 3] > 180 && dy > fBaseY - 14) continue;
+
+              const heatShimmer = Math.round(22 * Math.sin(phase + hFrac * 5.2));
+              dst[di] = Math.min(255, srcData[si] + Math.max(0, heatShimmer));
+              dst[di + 1] = Math.min(255, Math.max(0, srcData[si + 1] + heatShimmer));
+              dst[di + 2] = srcData[si + 2];
+              dst[di + 3] = srcData[si + 3];
+            }
+          }
+        }
+      }
+
+      // 3. Add rising pixel-art ember sparks above the dancing flame tips
+      const emberSeeds = [
+        { ox: -0.28, speed: 1.0, phaseOff: 0.0, size: 3 },
+        { ox: 0.22, speed: 1.0, phaseOff: 0.38, size: 3 },
+        { ox: -0.05, speed: 1.0, phaseOff: 0.65, size: 4 },
+        { ox: 0.35, speed: 1.0, phaseOff: 0.82, size: 2 },
+        { ox: -0.36, speed: 1.0, phaseOff: 0.52, size: 2 }
+      ];
+      const flameW = Math.max(16, fMaxX - fMinX);
+      for (let e = 0; e < emberSeeds.length; e++) {
+        const es = emberSeeds[e];
+        const t = ((f / frameCount) * es.speed + es.phaseOff) % 1.0;
+        const ex = Math.round(fCenterX + es.ox * flameW + Math.sin(t * Math.PI * 2 + e) * 5);
+        const ey = Math.round(fMinY + 14 - t * 26);
+        const sz = t > 0.75 ? Math.max(1, es.size - 1) : es.size;
+
+        for (let py = 0; py < sz; py++) {
+          for (let px = 0; px < sz; px++) {
+            const tx = ex + px;
+            const ty = ey + py;
+            if (tx >= 2 && tx < cellW - 2 && ty >= 2 && ty < cellH - 2) {
+              const di = (ty * cellW + tx) * 4;
+              const isCore = px > 0 && px < sz - 1 && py > 0 && py < sz - 1;
+              dst[di] = 255;
+              dst[di + 1] = isCore ? 240 : t < 0.5 ? 185 : 110;
+              dst[di + 2] = isCore ? 140 : 25;
+              dst[di + 3] = t > 0.85 ? 165 : 255;
+            }
+          }
+        }
+      }
+
+      fCtx.putImageData(outImg, 0, 0);
+      const tex = new THREE.CanvasTexture(fCanvas);
+      tex.minFilter = THREE.NearestFilter;
+      tex.magFilter = THREE.NearestFilter;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.generateMipmaps = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+
+      materials.push(
+        new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          alphaTest: 0.08,
+          side: THREE.DoubleSide
+        })
+      );
+    }
+
+    return materials;
   }
 
   /**

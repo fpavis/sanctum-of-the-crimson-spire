@@ -139,8 +139,8 @@ class GameApp {
           customRegions: [
             { x0: 0.01, y0: 0.05, x1: 0.25, y1: 0.95 },
             { x0: 0.26, y0: 0.05, x1: 0.48, y1: 0.95 },
-            { x0: 0.48, y0: 0.18, x1: 0.77, y1: 0.88 },
-            { x0: 0.70, y0: 0.54, x1: 0.99, y1: 0.92 }
+            { x0: 0.485, y0: 0.18, x1: 0.765, y1: 0.88, excludeRects: [{ x0: 0.70, y0: 0.54, x1: 0.77, y1: 0.95 }] },
+            { x0: 0.70, y0: 0.54, x1: 0.99, y1: 0.92, excludeRects: [{ x0: 0.70, y0: 0.15, x1: 0.77, y1: 0.55 }] }
           ]
         }
       },
@@ -153,12 +153,12 @@ class GameApp {
           rows: 1,
           alignBottom: true,
           orientDeathFrameHorizontal: true,
-          padding: 0.04,
+          padding: 0.05,
           customRegions: [
             { x0: 0.02, y0: 0.24, x1: 0.22, y1: 0.72 },
             { x0: 0.24, y0: 0.24, x1: 0.44, y1: 0.72 },
-            { x0: 0.47, y0: 0.24, x1: 0.76, y1: 0.72 },
-            { x0: 0.76, y0: 0.24, x1: 0.98, y1: 0.72 }
+            { x0: 0.47, y0: 0.24, x1: 0.755, y1: 0.72 },
+            { x0: 0.762, y0: 0.24, x1: 0.98, y1: 0.72 }
           ]
         }
       },
@@ -171,7 +171,7 @@ class GameApp {
           rows: 1,
           alignBottom: true,
           orientDeathFrameHorizontal: true,
-          padding: 0.04,
+          padding: 0.05,
           customRegions: [
             { x0: 0.04, y0: 0.24, x1: 0.22, y1: 0.74 },
             { x0: 0.25, y0: 0.24, x1: 0.498, y1: 0.74 },
@@ -189,7 +189,7 @@ class GameApp {
           rows: 1,
           alignBottom: true,
           orientDeathFrameHorizontal: true,
-          padding: 0.04,
+          padding: 0.05,
           customRegions: [
             { x0: 0.03, y0: 0.16, x1: 0.245, y1: 0.74 },
             { x0: 0.25, y0: 0.22, x1: 0.525, y1: 0.74 },
@@ -210,9 +210,9 @@ class GameApp {
           padding: 0.05,
           customRegions: [
             { x0: 0.01, y0: 0.15, x1: 0.25, y1: 0.82 },
-            { x0: 0.255, y0: 0.15, x1: 0.485, y1: 0.82 },
-            { x0: 0.485, y0: 0.15, x1: 0.745, y1: 0.82 },
-            { x0: 0.735, y0: 0.15, x1: 0.99, y1: 0.82 }
+            { x0: 0.255, y0: 0.15, x1: 0.482, y1: 0.82 },
+            { x0: 0.488, y0: 0.15, x1: 0.738, y1: 0.82 },
+            { x0: 0.742, y0: 0.15, x1: 0.99, y1: 0.82 }
           ]
         }
       },
@@ -220,7 +220,18 @@ class GameApp {
         id: 'props',
         type: 'chroma',
         url: BASE_URL + 'assets/pickups_and_props.jpg',
-        options: { cols: 4, rows: 1, alignBottom: false, padding: 0.08 }
+        options: {
+          cols: 4,
+          rows: 1,
+          alignBottom: false,
+          padding: 0.08,
+          customRegions: [
+            { x0: 0.04, y0: 0.25, x1: 0.24, y1: 0.74 },
+            { x0: 0.28, y0: 0.25, x1: 0.46, y1: 0.74 },
+            { x0: 0.49, y0: 0.25, x1: 0.73, y1: 0.74 },
+            { x0: 0.76, y0: 0.16, x1: 0.95, y1: 0.76 }
+          ]
+        }
       },
       {
         id: 'decor',
@@ -230,12 +241,12 @@ class GameApp {
           cols: 4,
           rows: 1,
           alignBottom: true,
-          padding: 0.02,
+          padding: 0.06,
           customRegions: [
-            { x0: 0.02, y0: 0.35, x1: 0.21, y1: 0.88 },
-            { x0: 0.22, y0: 0.10, x1: 0.485, y1: 0.88 },
-            { x0: 0.495, y0: 0.36, x1: 0.768, y1: 0.88 },
-            { x0: 0.745, y0: 0.10, x1: 0.99, y1: 0.82 }
+            { x0: 0.03, y0: 0.35, x1: 0.205, y1: 0.88 },
+            { x0: 0.222, y0: 0.10, x1: 0.482, y1: 0.88 },
+            { x0: 0.498, y0: 0.36, x1: 0.766, y1: 0.88, excludeRects: [{ x0: 0.74, y0: 0.0, x1: 1.0, y1: 0.25 }] },
+            { x0: 0.745, y0: 0.10, x1: 0.988, y1: 0.82, excludeRects: [{ x0: 0.70, y0: 0.22, x1: 0.785, y1: 0.95 }] }
           ]
         }
       },

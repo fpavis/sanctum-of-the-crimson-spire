@@ -682,7 +682,7 @@ export class Player {
 
     if (this.isGrounded) {
       this.hasAirDashed = false;
-      this.position.y = THREE.MathUtils.lerp(this.position.y, minEyeY, Math.min(1, delta * 15.0));
+      this.position.y = THREE.MathUtils.lerp(this.position.y, minEyeY, Math.min(1, delta * 28.0));
       if (this.jumpBufferTimer > 0) {
         this.velocity.y = this.jumpForce;
         this.isGrounded = false;
@@ -714,8 +714,15 @@ export class Player {
       return true;
     }
 
-    const feetY = pos.y - this.playerHeight + 0.35;
-    const headY = pos.y + 0.15;
+    const rawFeetY = pos.y - this.playerHeight;
+    const stepFloorY =
+      this.isGrounded && this.level && this.level.getFloorHeight
+        ? this.level.getFloorHeight(pos.x, pos.z, Math.max(rawFeetY, this.currentFloorY))
+        : rawFeetY;
+    const effectiveFeetY = Math.max(rawFeetY, this.isGrounded ? Math.max(this.currentFloorY, stepFloorY) : rawFeetY);
+
+    const feetY = effectiveFeetY + 0.35;
+    const headY = effectiveFeetY + this.playerHeight + 0.15;
     const playerBox = new THREE.Box3(
       new THREE.Vector3(pos.x - this.playerRadius, feetY, pos.z - this.playerRadius),
       new THREE.Vector3(pos.x + this.playerRadius, headY, pos.z + this.playerRadius)
