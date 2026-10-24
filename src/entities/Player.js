@@ -94,6 +94,8 @@ export class Player {
     this.hurtTimer = 0;
 
     this.isLocked = false;
+    this.yaw = 0;
+    this.pitch = 0;
     this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
     // Initialize Viewmodel
@@ -115,7 +117,9 @@ export class Player {
     this.currentFloorY = y;
     this.position.set(x, y + this.playerHeight, z);
     this.velocity.set(0, 0, 0);
-    this.euler.set(pitch, yaw, 0, 'YXZ');
+    this.yaw = yaw;
+    this.pitch = THREE.MathUtils.clamp(pitch, -1.38, 1.38);
+    this.euler.set(this.pitch, this.yaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(this.euler);
     this.camera.position.copy(this.position);
   }
@@ -256,7 +260,14 @@ export class Player {
   setupInputs() {
     this.domElement.addEventListener('click', () => {
       if (!this.isLocked) {
-        this.domElement.requestPointerLock();
+        try {
+          const lockPromise = this.domElement.requestPointerLock({ unadjustedMovement: true });
+          if (lockPromise && typeof lockPromise.catch === 'function') {
+            lockPromise.catch(() => this.domElement.requestPointerLock());
+          }
+        } catch (err) {
+          this.domElement.requestPointerLock();
+        }
       }
     });
 
@@ -272,11 +283,18 @@ export class Player {
       const movementX = e.movementX || 0;
       const movementY = e.movementY || 0;
 
-      this.euler.setFromQuaternion(this.camera.quaternion);
-      this.euler.y -= movementX * 0.0018;
-      this.euler.x -= movementY * 0.0018;
+      // Reject abnormal OS pointer-lock re-centering spikes that cause camera twitching
+      if (Math.abs(movementX) > 160 || Math.abs(movementY) > 160) return;
 
-      this.euler.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, this.euler.x));
+      const sensitivity = 0.0018;
+      this.yaw -= movementX * sensitivity;
+      this.pitch = THREE.MathUtils.clamp(
+        this.pitch - movementY * sensitivity,
+        -1.38,
+        1.38
+      );
+
+      this.euler.set(this.pitch, this.yaw, 0, 'YXZ');
       this.camera.quaternion.setFromEuler(this.euler);
     });
 
@@ -703,6 +721,13 @@ export class Player {
       new THREE.Vector3(pos.x + this.playerRadius, headY, pos.z + this.playerRadius)
     );
 
+    const curFeetY = this.position.y - this.playerHeight + 0.35;
+    const curHeadY = this.position.y + 0.15;
+    const currentBox = new THREE.Box3(
+      new THREE.Vector3(this.position.x - this.playerRadius, curFeetY, this.position.z - this.playerRadius),
+      new THREE.Vector3(this.position.x + this.playerRadius, curHeadY, this.position.z + this.playerRadius)
+    );
+
     for (let i = 0; i < walls.length; i++) {
       const wall = walls[i];
       if (!wall.boundingBox) {
@@ -710,6 +735,16 @@ export class Player {
         wall.boundingBox = new THREE.Box3().setFromObject(wall);
       }
       if (playerBox.intersectsBox(wall.boundingBox)) {
+        // Anti-stuck safeguard: if already overlapping a collider, allow movement that increases horizontal distance from its center
+        if (currentBox.intersectsBox(wall.boundingBox)) {
+          const cx = (wall.boundingBox.min.x + wall.boundingBox.max.x) * 0.5;
+          const cz = (wall.boundingBox.min.z + wall.boundingBox.max.z) * 0.5;
+          const curDistSq = (this.position.x - cx) ** 2 + (this.position.z - cz) ** 2;
+          const nextDistSq = (pos.x - cx) ** 2 + (pos.z - cz) ** 2;
+          if (nextDistSq > curDistSq + 0.0001) {
+            continue;
+          }
+        }
         return true;
       }
     }

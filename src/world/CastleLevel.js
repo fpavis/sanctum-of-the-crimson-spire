@@ -47,7 +47,7 @@ export class CastleLevel {
     this.initSharedMaterials();
   }
 
-  cloneTiledSet(pbrSet, rx, ry) {
+  cloneTiledSet(pbrSet, rx = 1, ry = 1) {
     const cloneTex = (t, isColor = false) => {
       if (!t) return null;
       const c = t.clone();
@@ -65,25 +65,105 @@ export class CastleLevel {
     };
   }
 
-  initSharedMaterials() {
-    const lavaFloorSet = this.cloneTiledSet(this.pbrTextures.lavaWall || this.pbrTextures.floor, 6, 6);
-    const iceFloorSet = this.cloneTiledSet(this.pbrTextures.iceWall || this.pbrTextures.floor, 6, 6);
-    const sanctumFloorSet = this.cloneTiledSet(this.pbrTextures.sanctumWall || this.pbrTextures.floor, 6, 6);
+  /**
+   * Creates a BoxGeometry with world-space scaled UVs on all 6 faces so textures never stretch or squash
+   */
+  createTiledBoxGeometry(width, height, depth, tileSize = 3.2) {
+    const geo = new THREE.BoxGeometry(width, height, depth);
+    const uvAttr = geo.attributes.uv;
+    const normAttr = geo.attributes.normal;
+    if (uvAttr && normAttr) {
+      for (let i = 0; i < uvAttr.count; i++) {
+        const nx = Math.abs(normAttr.getX(i));
+        const ny = Math.abs(normAttr.getY(i));
+        const u = uvAttr.getX(i);
+        const v = uvAttr.getY(i);
+        if (nx > 0.5) {
+          uvAttr.setXY(i, u * (depth / tileSize), v * (height / tileSize));
+        } else if (ny > 0.5) {
+          uvAttr.setXY(i, u * (width / tileSize), v * (depth / tileSize));
+        } else {
+          uvAttr.setXY(i, u * (width / tileSize), v * (height / tileSize));
+        }
+      }
+      uvAttr.needsUpdate = true;
+    }
+    return geo;
+  }
 
-    // 5 Distinct Biome Wall Materials
+  /**
+   * Creates a CylinderGeometry with world-space scaled UVs around its circumference and height
+   */
+  createTiledCylinderGeometry(rTop, rBot, height, radialSegments = 12, tileSize = 3.2) {
+    const geo = new THREE.CylinderGeometry(rTop, rBot, height, radialSegments);
+    const uvAttr = geo.attributes.uv;
+    const normAttr = geo.attributes.normal;
+    const circum = 2 * Math.PI * ((rTop + rBot) * 0.5);
+    const uRepeats = Math.max(1, Math.round(circum / tileSize));
+    const vRepeats = Math.max(0.25, height / tileSize);
+    if (uvAttr && normAttr) {
+      for (let i = 0; i < uvAttr.count; i++) {
+        const ny = Math.abs(normAttr.getY(i));
+        const u = uvAttr.getX(i);
+        const v = uvAttr.getY(i);
+        if (ny < 0.5) {
+          uvAttr.setXY(i, u * uRepeats, v * vRepeats);
+        } else {
+          const capScale = (Math.max(rTop, rBot) * 2) / tileSize;
+          uvAttr.setXY(i, u * capScale, v * capScale);
+        }
+      }
+      uvAttr.needsUpdate = true;
+    }
+    return geo;
+  }
+
+  /**
+   * Creates a PlaneGeometry with world-space scaled UVs
+   */
+  createTiledPlaneGeometry(width, height, tileSize = 3.2) {
+    const geo = new THREE.PlaneGeometry(width, height);
+    const uvAttr = geo.attributes.uv;
+    if (uvAttr) {
+      for (let i = 0; i < uvAttr.count; i++) {
+        uvAttr.setXY(i, uvAttr.getX(i) * (width / tileSize), uvAttr.getY(i) * (height / tileSize));
+      }
+      uvAttr.needsUpdate = true;
+    }
+    return geo;
+  }
+
+  getPlatformMaterials() {
+    const wMat = this.activeWallMat;
+    const fMat = this.activeFloorMat;
+    return [wMat, wMat, fMat, wMat, wMat, wMat];
+  }
+
+  initSharedMaterials() {
+    const stoneWallSet = this.cloneTiledSet(this.pbrTextures.wall, 1, 1);
+    const lavaWallSet = this.cloneTiledSet(this.pbrTextures.lavaWall || this.pbrTextures.wall, 1, 1);
+    const iceWallSet = this.cloneTiledSet(this.pbrTextures.iceWall || this.pbrTextures.wall, 1, 1);
+    const sanctumWallSet = this.cloneTiledSet(this.pbrTextures.sanctumWall || this.pbrTextures.wall, 1, 1);
+
+    const stoneFloorSet = this.cloneTiledSet(this.pbrTextures.floor, 1, 1);
+    const lavaFloorSet = this.cloneTiledSet(this.pbrTextures.lavaWall || this.pbrTextures.floor, 1, 1);
+    const iceFloorSet = this.cloneTiledSet(this.pbrTextures.iceWall || this.pbrTextures.floor, 1, 1);
+    const sanctumFloorSet = this.cloneTiledSet(this.pbrTextures.sanctumWall || this.pbrTextures.floor, 1, 1);
+
+    // 5 Distinct Biome Wall Materials (using 1:1 repeat with world-space geometry UVs)
     this.wallMaterials = {
       stone: new THREE.MeshStandardMaterial({
-        map: this.pbrTextures.wall.albedo,
-        normalMap: this.pbrTextures.wall.normal,
-        roughnessMap: this.pbrTextures.wall.roughness,
+        map: stoneWallSet.albedo,
+        normalMap: stoneWallSet.normal,
+        roughnessMap: stoneWallSet.roughness,
         color: 0xb8c4d8,
         roughness: 0.8,
         metalness: 0.1
       }),
       lava: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.lavaWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.lavaWall || this.pbrTextures.wall).normal,
-        roughnessMap: (this.pbrTextures.lavaWall || this.pbrTextures.wall).roughness,
+        map: lavaWallSet.albedo,
+        normalMap: lavaWallSet.normal,
+        roughnessMap: lavaWallSet.roughness,
         color: 0xffaa88,
         roughness: 0.72,
         metalness: 0.18,
@@ -91,9 +171,9 @@ export class CastleLevel {
         emissiveIntensity: 0.42
       }),
       ice: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.iceWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.iceWall || this.pbrTextures.wall).normal,
-        roughnessMap: (this.pbrTextures.iceWall || this.pbrTextures.wall).roughness,
+        map: iceWallSet.albedo,
+        normalMap: iceWallSet.normal,
+        roughnessMap: iceWallSet.roughness,
         color: 0xc8f0ff,
         roughness: 0.32,
         metalness: 0.32,
@@ -101,9 +181,9 @@ export class CastleLevel {
         emissiveIntensity: 0.35
       }),
       sanctum: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).normal,
-        roughnessMap: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).roughness,
+        map: sanctumWallSet.albedo,
+        normalMap: sanctumWallSet.normal,
+        roughnessMap: sanctumWallSet.roughness,
         color: 0xa8f0cc,
         roughness: 0.58,
         metalness: 0.25,
@@ -111,9 +191,9 @@ export class CastleLevel {
         emissiveIntensity: 0.32
       }),
       astral: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).normal,
-        roughnessMap: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).roughness,
+        map: sanctumWallSet.albedo,
+        normalMap: sanctumWallSet.normal,
+        roughnessMap: sanctumWallSet.roughness,
         color: 0xd4b8ff,
         roughness: 0.52,
         metalness: 0.3,
@@ -125,9 +205,9 @@ export class CastleLevel {
     // 5 Distinct Biome Floor Materials
     this.floorMaterials = {
       stone: new THREE.MeshStandardMaterial({
-        map: this.pbrTextures.floor.albedo,
-        normalMap: this.pbrTextures.floor.normal,
-        roughnessMap: this.pbrTextures.floor.roughness,
+        map: stoneFloorSet.albedo,
+        normalMap: stoneFloorSet.normal,
+        roughnessMap: stoneFloorSet.roughness,
         color: 0x99aacc,
         roughness: 0.72,
         metalness: 0.14
@@ -177,16 +257,16 @@ export class CastleLevel {
     // Biome-Specific Ceiling Materials
     this.ceilMaterials = {
       stone: new THREE.MeshStandardMaterial({
-        map: this.pbrTextures.wall.albedo,
-        normalMap: this.pbrTextures.wall.normal,
+        map: stoneWallSet.albedo,
+        normalMap: stoneWallSet.normal,
         roughness: 0.85,
         metalness: 0.1,
         color: 0x485468,
         side: THREE.DoubleSide
       }),
       lava: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.lavaWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.lavaWall || this.pbrTextures.wall).normal,
+        map: lavaWallSet.albedo,
+        normalMap: lavaWallSet.normal,
         roughness: 0.78,
         metalness: 0.2,
         color: 0x552218,
@@ -195,8 +275,8 @@ export class CastleLevel {
         side: THREE.DoubleSide
       }),
       sanctum: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.sanctumWall || this.pbrTextures.wall).normal,
+        map: sanctumWallSet.albedo,
+        normalMap: sanctumWallSet.normal,
         roughness: 0.65,
         metalness: 0.24,
         color: 0x2c5c48,
@@ -205,8 +285,8 @@ export class CastleLevel {
         side: THREE.DoubleSide
       }),
       ice: new THREE.MeshStandardMaterial({
-        map: (this.pbrTextures.iceWall || this.pbrTextures.wall).albedo,
-        normalMap: (this.pbrTextures.iceWall || this.pbrTextures.wall).normal,
+        map: iceWallSet.albedo,
+        normalMap: iceWallSet.normal,
         roughness: 0.38,
         metalness: 0.3,
         color: 0x5588aa,
@@ -340,11 +420,11 @@ export class CastleLevel {
       if (x >= hz.xMin && x <= hz.xMax && z >= hz.zMin && z <= hz.zMax) {
         if (hz.type === 'flat') {
           if (hz.isJumpPlatform) {
-            if (currentFeetY >= hz.y - 0.65 && hz.y > bestH) {
+            if (currentFeetY >= hz.y - 0.42 && hz.y > bestH) {
               bestH = hz.y;
             }
           } else {
-            if (currentFeetY >= hz.y - 0.95 && hz.y > bestH) {
+            if (currentFeetY >= hz.y - 0.42 && hz.y > bestH) {
               bestH = hz.y;
             }
             if (fallbackBaseH === -999 || hz.y < fallbackBaseH) {
@@ -380,7 +460,7 @@ export class CastleLevel {
   // --- HELPER BUILDERS ---
 
   createWall(x, yBottom, z, width, depth, height = 6.5, isCollider = true, extraTopCollider = 12.0, matOverride = null) {
-    const geo = new THREE.BoxGeometry(width, height, depth);
+    const geo = this.createTiledBoxGeometry(width, height, depth, 3.4);
     const mesh = new THREE.Mesh(geo, matOverride || this.activeWallMat);
     mesh.position.set(x, yBottom + height / 2, z);
 
@@ -404,7 +484,7 @@ export class CastleLevel {
     const baseWall = this.createWall(x, yBottom - 2.0, z, width, depth, wallH + 2.0, true, 14.0);
 
     // Coping stone ledge along the top of the wall
-    const copingGeo = new THREE.BoxGeometry(width + 0.16, 0.22, depth + 0.16);
+    const copingGeo = this.createTiledBoxGeometry(width + 0.16, 0.22, depth + 0.16, 3.0);
     const copingMesh = new THREE.Mesh(copingGeo, this.pillarMaterial || this.activeWallMat);
     copingMesh.position.set(x, yBottom + wallH + 0.08, z);
     this.stageGroup.add(copingMesh);
@@ -416,7 +496,7 @@ export class CastleLevel {
       const mW = Math.min(1.25, step * 0.56);
       for (let i = 0; i < count; i++) {
         const mx = x - width / 2 + (i + 0.5) * step;
-        const mGeo = new THREE.BoxGeometry(mW, merlonH, depth + 0.08);
+        const mGeo = this.createTiledBoxGeometry(mW, merlonH, depth + 0.08, 2.8);
         const mMesh = new THREE.Mesh(mGeo, this.activeWallMat);
         mMesh.position.set(mx, yBottom + wallH + 0.18 + merlonH / 2, z);
         this.stageGroup.add(mMesh);
@@ -427,7 +507,7 @@ export class CastleLevel {
       const mD = Math.min(1.25, step * 0.56);
       for (let i = 0; i < count; i++) {
         const mz = z - depth / 2 + (i + 0.5) * step;
-        const mGeo = new THREE.BoxGeometry(width + 0.08, merlonH, mD);
+        const mGeo = this.createTiledBoxGeometry(width + 0.08, merlonH, mD, 2.8);
         const mMesh = new THREE.Mesh(mGeo, this.activeWallMat);
         mMesh.position.set(x, yBottom + wallH + 0.18 + merlonH / 2, mz);
         this.stageGroup.add(mMesh);
@@ -447,15 +527,15 @@ export class CastleLevel {
     return collider;
   }
 
-  createPlatformBlock(x, yTop, z, width, depth, thickness = 2.0, addSideCollider = false) {
-    const geo = new THREE.BoxGeometry(width, thickness, depth);
-    const mesh = new THREE.Mesh(geo, this.activeFloorMat);
+  createPlatformBlock(x, yTop, z, width, depth, thickness = 2.0, addSideCollider = true) {
+    const geo = this.createTiledBoxGeometry(width, thickness, depth, 3.2);
+    const mesh = new THREE.Mesh(geo, this.getPlatformMaterials());
     mesh.position.set(x, yTop - thickness / 2, z);
     this.stageGroup.add(mesh);
 
-    if (addSideCollider && thickness > 0.4) {
-      // Solid under-ledge collider up to yTop - 0.08 so players in sunken basins cannot walk through the platform's sides
-      this.createInvisibleColliderBox(x, yTop - thickness, z, width - 0.1, thickness - 0.08, depth - 0.1);
+    if (addSideCollider && thickness > 0.35) {
+      // Solid under-ledge collider up to yTop - 0.14 so players at lower elevations cannot walk through platform sides
+      this.createInvisibleColliderBox(x, yTop - thickness, z, width, Math.max(0.2, thickness - 0.14), depth);
     }
 
     this.heightZones.push({
@@ -471,27 +551,38 @@ export class CastleLevel {
   }
 
   createJumpPlatform(x, yTop, z, width, depth, thickness = 0.7, trimColor = 0x00eeff) {
-    const geo = new THREE.BoxGeometry(width, thickness, depth);
-    const mesh = new THREE.Mesh(geo, this.activeFloorMat);
+    const geo = this.createTiledBoxGeometry(width, thickness, depth, 3.0);
+    const mesh = new THREE.Mesh(geo, this.getPlatformMaterials());
     mesh.position.set(x, yTop - thickness / 2, z);
     this.stageGroup.add(mesh);
 
-    const trimGeo = new THREE.BoxGeometry(width + 0.14, 0.12, depth + 0.14);
+    // 4 non-overlapping outer perimeter trim strips placed below yTop so there is zero Z-fighting on the top surface
     const trimMat = new THREE.MeshBasicMaterial({ color: trimColor });
-    const trimMesh = new THREE.Mesh(trimGeo, trimMat);
-    trimMesh.position.set(x, yTop - 0.06, z);
-    this.stageGroup.add(trimMesh);
+    const trimH = 0.10;
+    const trimT = 0.06;
+    const trimY = yTop - 0.12;
+
+    const trimN = new THREE.Mesh(new THREE.BoxGeometry(width + trimT * 2, trimH, trimT), trimMat);
+    trimN.position.set(x, trimY, z - depth / 2 - trimT / 2);
+    const trimS = new THREE.Mesh(new THREE.BoxGeometry(width + trimT * 2, trimH, trimT), trimMat);
+    trimS.position.set(x, trimY, z + depth / 2 + trimT / 2);
+    const trimW = new THREE.Mesh(new THREE.BoxGeometry(trimT, trimH, depth), trimMat);
+    trimW.position.set(x - width / 2 - trimT / 2, trimY, z);
+    const trimE = new THREE.Mesh(new THREE.BoxGeometry(trimT, trimH, depth), trimMat);
+    trimE.position.set(x + width / 2 + trimT / 2, trimY, z);
+    this.stageGroup.add(trimN, trimS, trimW, trimE);
 
     const pillarH = Math.max(0.5, yTop + 3.0);
-    const pillarGeo = new THREE.CylinderGeometry(
-      Math.min(width, depth) * 0.22,
-      Math.min(width, depth) * 0.32,
-      pillarH,
-      8
-    );
+    const rTop = Math.min(width, depth) * 0.22;
+    const rBot = Math.min(width, depth) * 0.32;
+    const pillarGeo = this.createTiledCylinderGeometry(rTop, rBot, pillarH, 10, 3.0);
     const pillarMesh = new THREE.Mesh(pillarGeo, this.activeWallMat);
     pillarMesh.position.set(x, yTop - thickness - pillarH / 2, z);
     this.stageGroup.add(pillarMesh);
+
+    // Solid side-wall collider for the platform slab (up to yTop - 0.14) and support pillar underneath
+    this.createInvisibleColliderBox(x, yTop - thickness, z, width, Math.max(0.2, thickness - 0.14), depth);
+    this.createInvisibleColliderBox(x, yTop - thickness - pillarH, z, rBot * 1.65, pillarH, rBot * 1.65);
 
     this.heightZones.push({
       type: 'flat',
@@ -547,7 +638,7 @@ export class CastleLevel {
     const col = colors[type] || 0xff3800;
 
     // Solid dark sub-basin floor below the liquid surface
-    const subGeo = new THREE.BoxGeometry(width, 1.2, depth);
+    const subGeo = this.createTiledBoxGeometry(width, 1.2, depth, 3.4);
     const subMesh = new THREE.Mesh(subGeo, this.activeWallMat);
     subMesh.position.set(x, ySurface - 0.65, z);
     this.stageGroup.add(subMesh);
@@ -557,7 +648,10 @@ export class CastleLevel {
     const mat = new THREE.MeshBasicMaterial({
       color: col,
       transparent: true,
-      opacity: 0.86
+      opacity: 0.86,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, ySurface, z);
@@ -588,22 +682,27 @@ export class CastleLevel {
     const zMin = Math.min(zStart, zEnd);
     const zMax = Math.max(zStart, zEnd);
     const len = zMax - zMin;
-    const stepDepth = len / stepCount;
+    const isFlatBridge = Math.abs(yEnd - yStart) < 0.05;
+    const actualSteps = isFlatBridge ? 1 : stepCount;
+    const stepDepth = len / actualSteps;
 
-    for (let i = 0; i < stepCount; i++) {
-      const t = (i + 0.5) / stepCount;
-      const stepY = THREE.MathUtils.lerp(yStart, yEnd, (i + 0.5) / stepCount);
+    for (let i = 0; i < actualSteps; i++) {
+      const t = (i + 0.5) / actualSteps;
+      const stepY = isFlatBridge ? yStart - 0.01 : THREE.MathUtils.lerp(yStart, yEnd, t);
       const stepZ = THREE.MathUtils.lerp(zStart, zEnd, t);
       const h = Math.max(1.2, stepY + 2.5);
-      const geo = new THREE.BoxGeometry(width, h, stepDepth + 0.12);
-      const mesh = new THREE.Mesh(geo, this.activeFloorMat);
+      const geo = this.createTiledBoxGeometry(width, h, stepDepth, 3.0);
+      const mesh = new THREE.Mesh(geo, this.getPlatformMaterials());
       mesh.position.set(x, stepY - h / 2, stepZ);
       this.stageGroup.add(mesh);
 
-      if (addBalustrades && i % 3 === 1) {
+      if (addBalustrades && (isFlatBridge || i % 3 === 1)) {
         const postH = balustradeH + 0.55;
         [-width / 2 - 0.42, width / 2 + 0.42].forEach((bx) => {
-          const postMesh = new THREE.Mesh(new THREE.BoxGeometry(0.95, postH, 0.95), this.pillarMaterial || this.activeWallMat);
+          const postMesh = new THREE.Mesh(
+            this.createTiledBoxGeometry(0.95, postH, 0.95, 2.8),
+            this.pillarMaterial || this.activeWallMat
+          );
           postMesh.position.set(x + bx, stepY + postH / 2 - 0.2, stepZ);
           this.stageGroup.add(postMesh);
         });
@@ -636,22 +735,27 @@ export class CastleLevel {
     const xMin = Math.min(xStart, xEnd);
     const xMax = Math.max(xStart, xEnd);
     const len = xMax - xMin;
-    const stepWidth = len / stepCount;
+    const isFlatBridge = Math.abs(yEnd - yStart) < 0.05;
+    const actualSteps = isFlatBridge ? 1 : stepCount;
+    const stepWidth = len / actualSteps;
 
-    for (let i = 0; i < stepCount; i++) {
-      const t = (i + 0.5) / stepCount;
-      const stepY = THREE.MathUtils.lerp(yStart, yEnd, (i + 0.5) / stepCount);
+    for (let i = 0; i < actualSteps; i++) {
+      const t = (i + 0.5) / actualSteps;
+      const stepY = isFlatBridge ? yStart - 0.01 : THREE.MathUtils.lerp(yStart, yEnd, t);
       const stepX = THREE.MathUtils.lerp(xStart, xEnd, t);
       const h = Math.max(1.2, stepY + 2.5);
-      const geo = new THREE.BoxGeometry(stepWidth + 0.12, h, depth);
-      const mesh = new THREE.Mesh(geo, this.activeFloorMat);
+      const geo = this.createTiledBoxGeometry(stepWidth, h, depth, 3.0);
+      const mesh = new THREE.Mesh(geo, this.getPlatformMaterials());
       mesh.position.set(stepX, stepY - h / 2, z);
       this.stageGroup.add(mesh);
 
-      if (addBalustrades && i % 3 === 1) {
+      if (addBalustrades && (isFlatBridge || i % 3 === 1)) {
         const postH = balustradeH + 0.55;
         [-depth / 2 - 0.42, depth / 2 + 0.42].forEach((bz) => {
-          const postMesh = new THREE.Mesh(new THREE.BoxGeometry(0.95, postH, 0.95), this.pillarMaterial || this.activeWallMat);
+          const postMesh = new THREE.Mesh(
+            this.createTiledBoxGeometry(0.95, postH, 0.95, 2.8),
+            this.pillarMaterial || this.activeWallMat
+          );
           postMesh.position.set(stepX, stepY + postH / 2 - 0.2, z + bz);
           this.stageGroup.add(postMesh);
         });
@@ -682,21 +786,22 @@ export class CastleLevel {
 
   createColumn(x, yBottom, z, radius = 0.58, height = 6.5) {
     const mat = this.pillarMaterial || this.activeWallMat;
-    const baseGeo = new THREE.BoxGeometry(radius * 2.4, 0.42, radius * 2.4);
+    const baseGeo = this.createTiledBoxGeometry(radius * 2.4, 0.42, radius * 2.4, 2.8);
     const baseMesh = new THREE.Mesh(baseGeo, mat);
     baseMesh.position.set(x, yBottom + 0.21, z);
     this.stageGroup.add(baseMesh);
 
-    const geo = new THREE.CylinderGeometry(radius, radius * 1.12, height, 10);
+    const geo = this.createTiledCylinderGeometry(radius, radius * 1.12, height, 12, 3.2);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, yBottom + height / 2, z);
 
     mesh.geometry.computeBoundingBox();
     mesh.boundingBox = new THREE.Box3().setFromObject(mesh);
+    mesh.boundingBox.max.y += 6.0;
     this.walls.push(mesh);
     this.stageGroup.add(mesh);
 
-    const capGeo = new THREE.BoxGeometry(radius * 2.5, 0.45, radius * 2.5);
+    const capGeo = this.createTiledBoxGeometry(radius * 2.5, 0.45, radius * 2.5, 2.8);
     const capMesh = new THREE.Mesh(capGeo, mat);
     capMesh.position.set(x, yBottom + height - 0.22, z);
     this.stageGroup.add(capMesh);
@@ -715,31 +820,43 @@ export class CastleLevel {
     group.position.set(x, yBottom, z);
     group.rotation.y = rotY;
 
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.38, 3.1), this.activeWallMat);
+    const plinth = new THREE.Mesh(this.createTiledBoxGeometry(1.65, 0.38, 3.1, 2.6), this.activeWallMat);
     plinth.position.set(0, 0.19, 0);
     group.add(plinth);
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.68, 2.7), this.activeWallMat);
+    const body = new THREE.Mesh(this.createTiledBoxGeometry(1.32, 0.68, 2.7, 2.6), this.activeWallMat);
     body.position.set(0, 0.72, 0);
     group.add(body);
 
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.22, 2.82), this.pillarMaterial || this.activeWallMat);
+    const lid = new THREE.Mesh(this.createTiledBoxGeometry(1.42, 0.22, 2.82, 2.6), this.pillarMaterial || this.activeWallMat);
     lid.position.set(0, 1.16, 0);
     group.add(lid);
 
     const runeMat = new THREE.MeshBasicMaterial({ color: runeColor });
     const runeStrip = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 2.1), runeMat);
-    runeStrip.position.set(0, 1.28, 0);
+    runeStrip.position.set(0, 1.29, 0);
     group.add(runeStrip);
 
     const crossBar = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.06, 0.22), runeMat);
-    crossBar.position.set(0, 1.28, -0.35);
+    crossBar.position.set(0, 1.29, -0.35);
     group.add(crossBar);
 
     this.stageGroup.add(group);
     const w = Math.abs(Math.cos(rotY)) > 0.5 ? 1.65 : 3.1;
     const d = Math.abs(Math.cos(rotY)) > 0.5 ? 3.1 : 1.65;
-    this.createInvisibleColliderBox(x, yBottom, z, w, 1.4, d);
+    const yTop = yBottom + 1.28;
+
+    // Side collider stops at yTop - 0.14 so walking into the coffin blocks the player, while jumping lands on top of the lid!
+    this.createInvisibleColliderBox(x, yBottom, z, w, 1.14, d);
+    this.heightZones.push({
+      type: 'flat',
+      isJumpPlatform: true,
+      xMin: x - w / 2 - 0.18,
+      xMax: x + w / 2 + 0.18,
+      zMin: z - d / 2 - 0.18,
+      zMax: z + d / 2 + 0.18,
+      y: yTop
+    });
   }
 
   /**
@@ -751,12 +868,12 @@ export class CastleLevel {
     group.rotation.y = rotY;
 
     // Stepped Forge Hearth Base
-    const hearth = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.45, 2.6), this.activeWallMat);
+    const hearth = new THREE.Mesh(this.createTiledBoxGeometry(3.2, 0.45, 2.6, 3.0), this.activeWallMat);
     hearth.position.set(0, 0.225, 0);
     group.add(hearth);
 
     // Tall Obsidian Smelting Chimney
-    const chimney = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.8, 1.7), this.activeWallMat);
+    const chimney = new THREE.Mesh(this.createTiledBoxGeometry(2.4, 3.8, 1.7, 3.0), this.activeWallMat);
     chimney.position.set(0, 2.1, -0.35);
     group.add(chimney);
 
@@ -788,7 +905,7 @@ export class CastleLevel {
     group.add(anvilTop);
 
     this.stageGroup.add(group);
-    this.createInvisibleColliderBox(x, yBottom, z, 3.1, 3.8, 3.2);
+    this.createInvisibleColliderBox(x, yBottom, z, 3.1, 8.5, 3.2);
   }
 
   /**
@@ -797,24 +914,29 @@ export class CastleLevel {
   createLavaChannelWithGrate(x, ySurface, z, width, depth, colorHex = 0xff4400) {
     const lavaGeo = new THREE.PlaneGeometry(width, depth);
     lavaGeo.rotateX(-Math.PI / 2);
-    const lavaMat = new THREE.MeshBasicMaterial({ color: colorHex });
+    const lavaMat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
+    });
     const lavaMesh = new THREE.Mesh(lavaGeo, lavaMat);
-    lavaMesh.position.set(x, ySurface + 0.03, z);
+    lavaMesh.position.set(x, ySurface + 0.02, z);
     this.stageGroup.add(lavaMesh);
 
     // Iron curb rims
     const rimL = new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 0.14, 0.22), this.darkIronMat);
-    rimL.position.set(x, ySurface + 0.07, z - depth / 2);
+    rimL.position.set(x, ySurface + 0.08, z - depth / 2);
     const rimR = new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 0.14, 0.22), this.darkIronMat);
-    rimR.position.set(x, ySurface + 0.07, z + depth / 2);
+    rimR.position.set(x, ySurface + 0.08, z + depth / 2);
     this.stageGroup.add(rimL, rimR);
 
     // Iron grate crossbars so player walks safely over the glowing lava trench
     const barCount = Math.max(4, Math.floor(width / 0.85));
     for (let i = 0; i <= barCount; i++) {
       const bx = x - width / 2 + (i / barCount) * width;
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, depth), this.darkIronMat);
-      bar.position.set(bx, ySurface + 0.06, z);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.10, depth - 0.24), this.darkIronMat);
+      bar.position.set(bx, ySurface + 0.07, z);
       this.stageGroup.add(bar);
     }
   }
@@ -862,7 +984,7 @@ export class CastleLevel {
     }
 
     this.stageGroup.add(group);
-    this.createInvisibleColliderBox(x, yBottom, z, 2.1, 3.5, 2.1);
+    this.createInvisibleColliderBox(x, yBottom, z, 2.1, 8.5, 2.1);
   }
 
   /**
@@ -873,7 +995,10 @@ export class CastleLevel {
       color: colorHex,
       transparent: true,
       opacity: 0.72,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     });
 
     const outerRing = new THREE.Mesh(new THREE.RingGeometry(radius * 0.88, radius, 28), mat);
@@ -928,32 +1053,35 @@ export class CastleLevel {
     });
 
     this.stageGroup.add(group);
-    this.createInvisibleColliderBox(x, yBottom, z, 1.8 * scale, 3.0 * scale, 1.8 * scale);
+    this.createInvisibleColliderBox(x, yBottom, z, 1.8 * scale, 8.5, 1.8 * scale);
   }
 
   /**
    * Stage IV Glacial Aqueduct Overhead Archway Span
    */
   createAqueductArch(x, yBottom, z, spanW = 14.0, height = 7.2) {
-    const pillarL = new THREE.Mesh(new THREE.BoxGeometry(1.2, height, 1.2), this.activeWallMat);
+    const pillarL = new THREE.Mesh(this.createTiledBoxGeometry(1.2, height, 1.2, 3.0), this.activeWallMat);
     pillarL.position.set(x - spanW / 2, yBottom + height / 2, z);
-    const pillarR = new THREE.Mesh(new THREE.BoxGeometry(1.2, height, 1.2), this.activeWallMat);
+    const pillarR = new THREE.Mesh(this.createTiledBoxGeometry(1.2, height, 1.2, 3.0), this.activeWallMat);
     pillarR.position.set(x + spanW / 2, yBottom + height / 2, z);
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(spanW + 1.6, 0.95, 1.35), this.activeWallMat);
+    const beam = new THREE.Mesh(this.createTiledBoxGeometry(spanW + 1.6, 0.95, 1.35, 3.0), this.activeWallMat);
     beam.position.set(x, yBottom + height + 0.2, z);
     const trimBeam = new THREE.Mesh(
       new THREE.BoxGeometry(spanW + 1.8, 0.22, 1.45),
       new THREE.MeshBasicMaterial({ color: 0x00eeff })
     );
-    trimBeam.position.set(x, yBottom + height - 0.32, z);
+    trimBeam.position.set(x, yBottom + height - 0.38, z);
     this.stageGroup.add(pillarL, pillarR, beam, trimBeam);
+
+    this.createInvisibleColliderBox(x - spanW / 2, yBottom, z, 1.2, height + 2.0, 1.2);
+    this.createInvisibleColliderBox(x + spanW / 2, yBottom, z, 1.2, height + 2.0, 1.2);
   }
 
   /**
    * Stage III & V Setpiece: Rotating 3D Golden Astral Orrery
    */
   createAstralOrrery(x, yBottom, z, coreColor = 0x00eeff) {
-    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.9, 1.1, 12), this.activeWallMat);
+    const ped = new THREE.Mesh(this.createTiledCylinderGeometry(0.65, 0.9, 1.1, 12, 2.8), this.activeWallMat);
     ped.position.set(x, yBottom + 0.55, z);
     this.stageGroup.add(ped);
 
@@ -978,7 +1106,7 @@ export class CastleLevel {
       bobAmp: 0.15,
       seed: Math.random() * 10
     });
-    this.createInvisibleColliderBox(x, yBottom, z, 1.6, 2.5, 1.6);
+    this.createInvisibleColliderBox(x, yBottom, z, 1.6, 8.5, 1.6);
   }
 
   /**
@@ -1032,8 +1160,8 @@ export class CastleLevel {
       this.stageGroup.add(group);
       group.updateMatrixWorld(true);
 
-      const collider = new THREE.Mesh(new THREE.BoxGeometry(cabinetW, h, depth + 0.1));
-      collider.position.set(x, yBottom + h / 2, z);
+      const collider = new THREE.Mesh(new THREE.BoxGeometry(cabinetW, 8.5, depth + 0.1));
+      collider.position.set(x, yBottom + 4.25, z);
       collider.rotation.y = resolvedRotY;
       collider.updateMatrixWorld(true);
       collider.boundingBox = new THREE.Box3().setFromObject(collider);
@@ -1067,7 +1195,7 @@ export class CastleLevel {
       group.position.set(x, yBottom, z);
       group.rotation.y = resolvedRotY;
 
-      const plinthGeo = new THREE.BoxGeometry(altarW, altarH, altarDepth);
+      const plinthGeo = this.createTiledBoxGeometry(altarW, altarH, altarDepth, 2.6);
       const plinthMesh = new THREE.Mesh(plinthGeo, this.activeWallMat);
       plinthMesh.position.set(0, altarH / 2, 0);
       group.add(plinthMesh);
@@ -1079,8 +1207,8 @@ export class CastleLevel {
       this.stageGroup.add(group);
       group.updateMatrixWorld(true);
 
-      const collider = new THREE.Mesh(new THREE.BoxGeometry(altarW, altarH + 0.6, altarDepth));
-      collider.position.set(x, yBottom + (altarH + 0.6) / 2, z);
+      const collider = new THREE.Mesh(new THREE.BoxGeometry(altarW, 8.5, altarDepth));
+      collider.position.set(x, yBottom + 4.25, z);
       collider.rotation.y = resolvedRotY;
       collider.updateMatrixWorld(true);
       collider.boundingBox = new THREE.Box3().setFromObject(collider);
@@ -1091,7 +1219,7 @@ export class CastleLevel {
     // Default: 'brazier'
     const w = 1.45 * scale;
     const h = 1.85 * scale;
-    const baseGeo = new THREE.CylinderGeometry(0.52 * scale, 0.65 * scale, 0.16 * scale, 10);
+    const baseGeo = this.createTiledCylinderGeometry(0.52 * scale, 0.65 * scale, 0.16 * scale, 10, 2.6);
     const baseMesh = new THREE.Mesh(baseGeo, this.activeWallMat);
     baseMesh.position.set(x, yBottom + 0.08 * scale, z);
     this.stageGroup.add(baseMesh);
@@ -1121,20 +1249,27 @@ export class CastleLevel {
   }
 
   createStagePortal(x, yBottom, z, targetStageId, title, subtitle, colorHex = 0x8844ff) {
-    const pillarLeft = new THREE.Mesh(new THREE.BoxGeometry(0.65, 3.9, 0.65), this.activeWallMat);
+    const pillarMat = this.pillarMaterial || this.activeWallMat;
+    const pillarGeo = this.createTiledBoxGeometry(0.68, 3.9, 0.68, 2.6);
+
+    const pillarLeft = new THREE.Mesh(pillarGeo, pillarMat);
     pillarLeft.position.set(x - 1.65, yBottom + 1.95, z);
     this.stageGroup.add(pillarLeft);
 
-    const pillarRight = new THREE.Mesh(new THREE.BoxGeometry(0.65, 3.9, 0.65), this.activeWallMat);
+    const pillarRight = new THREE.Mesh(pillarGeo, pillarMat);
     pillarRight.position.set(x + 1.65, yBottom + 1.95, z);
     this.stageGroup.add(pillarRight);
 
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.75, 0.85), this.activeWallMat);
+    // Solid colliders for left and right portal pillars so player cannot walk through them
+    this.createInvisibleColliderBox(x - 1.65, yBottom, z, 0.72, 8.5, 0.72);
+    this.createInvisibleColliderBox(x + 1.65, yBottom, z, 0.72, 8.5, 0.72);
+
+    const lintel = new THREE.Mesh(this.createTiledBoxGeometry(4.3, 0.75, 0.85, 2.8), pillarMat);
     lintel.position.set(x, yBottom + 3.95, z);
     this.stageGroup.add(lintel);
 
     const trimCap = new THREE.Mesh(new THREE.BoxGeometry(4.45, 0.16, 0.92), new THREE.MeshBasicMaterial({ color: colorHex }));
-    trimCap.position.set(x, yBottom + 4.38, z);
+    trimCap.position.set(x, yBottom + 4.41, z);
     this.stageGroup.add(trimCap);
 
     const portalSprite = new AnimatedBillboardSprite(this.spriteTextures.portal, {
@@ -1207,7 +1342,7 @@ export class CastleLevel {
     mesh.rotation.y = 0.55;
     this.stageGroup.add(mesh);
 
-    const pedGeo = new THREE.CylinderGeometry(0.42, 0.55, 0.5, 8);
+    const pedGeo = this.createTiledCylinderGeometry(0.42, 0.55, 0.5, 8, 2.6);
     const pedMesh = new THREE.Mesh(pedGeo, this.activeWallMat);
     pedMesh.position.set(x, yBottom + 0.25, z);
     this.stageGroup.add(pedMesh);
@@ -1338,15 +1473,15 @@ export class CastleLevel {
    * Builds an ornate Gothic stone & glowing biome-trimmed archway framing a doorway
    */
   createDoorwayArchFrame(x, yBottom, z, doorW, doorH, axis = 'Z', trimColor = 0xffaa33) {
-    const pillarGeo = new THREE.BoxGeometry(0.68, doorH + 0.35, 1.05);
+    const pillarGeo = this.createTiledBoxGeometry(0.68, doorH + 0.35, 1.05, 2.8);
     const lintelGeo =
       axis === 'Z'
-        ? new THREE.BoxGeometry(doorW + 1.35, 0.72, 1.15)
-        : new THREE.BoxGeometry(1.15, 0.72, doorW + 1.35);
+        ? this.createTiledBoxGeometry(doorW + 1.35, 0.72, 1.15, 2.8)
+        : this.createTiledBoxGeometry(1.15, 0.72, doorW + 1.35, 2.8);
     const keystoneGeo =
       axis === 'Z'
-        ? new THREE.BoxGeometry(0.95, 1.05, 1.25)
-        : new THREE.BoxGeometry(1.25, 1.05, 0.95);
+        ? this.createTiledBoxGeometry(0.95, 1.05, 1.25, 2.6)
+        : this.createTiledBoxGeometry(1.25, 1.05, 0.95, 2.6);
 
     const trimMat = new THREE.MeshStandardMaterial({
       color: trimColor,
@@ -1391,17 +1526,17 @@ export class CastleLevel {
 
     // 1. Ceiling or Open-Sky Crenellated Battlement Coping
     if (!biome.openSky) {
-      const ceilGeo = new THREE.PlaneGeometry(w + 1.2, d + 1.2);
+      const ceilGeo = this.createTiledPlaneGeometry(w + 1.2, d + 1.2, 3.6);
       ceilGeo.rotateX(Math.PI / 2);
       const ceilMesh = new THREE.Mesh(ceilGeo, this.ceilMaterial);
       ceilMesh.position.set(x, y + wallH, z);
       this.stageGroup.add(ceilMesh);
 
       // Vaulted Ceiling Cross-Beams / Ribs so indoor ceilings have rich 3D depth
-      const beamX = new THREE.Mesh(new THREE.BoxGeometry(w - 0.4, 0.55, 0.75), this.pillarMaterial);
+      const beamX = new THREE.Mesh(this.createTiledBoxGeometry(w - 0.4, 0.55, 0.75, 3.2), this.pillarMaterial);
       beamX.position.set(x, y + wallH - 0.28, z);
-      const beamZ = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.55, d - 0.4), this.pillarMaterial);
-      beamZ.position.set(x, y + wallH - 0.28, z);
+      const beamZ = new THREE.Mesh(this.createTiledBoxGeometry(0.75, 0.52, d - 0.4, 3.2), this.pillarMaterial);
+      beamZ.position.set(x, y + wallH - 0.27, z);
       const bossHub = new THREE.Mesh(
         new THREE.CylinderGeometry(0.95, 0.85, 0.68, 8),
         new THREE.MeshBasicMaterial({ color: biome.trimColor })
@@ -1412,13 +1547,13 @@ export class CastleLevel {
 
     // 2. Structural Corner Buttress Pilasters at all 4 room corners
     const cornerOffsets = [
-      [-w / 2 + 0.35, -d / 2 + 0.35],
-      [w / 2 - 0.35, -d / 2 + 0.35],
-      [-w / 2 + 0.35, d / 2 - 0.35],
-      [w / 2 - 0.35, d / 2 - 0.35]
+      [-w / 2, -d / 2],
+      [w / 2, -d / 2],
+      [-w / 2, d / 2],
+      [w / 2, d / 2]
     ];
     cornerOffsets.forEach(([cx, cz]) => {
-      const pilaster = new THREE.Mesh(new THREE.BoxGeometry(1.25, wallH + 0.5, 1.25), this.pillarMaterial);
+      const pilaster = new THREE.Mesh(this.createTiledBoxGeometry(1.38, wallH + 0.4, 1.38, 3.2), this.pillarMaterial);
       pilaster.position.set(x + cx, y + wallH / 2, z + cz);
       this.stageGroup.add(pilaster);
     });
@@ -1433,8 +1568,8 @@ export class CastleLevel {
         }
         // Add recessed Gothic stained-glass / biome lancet window on closed walls
         if (w >= 18 && node.id !== 'north_sanctum') {
-          const winZ = zWall + (isNorth ? 0.54 : -0.54);
-          const winFrame = new THREE.Mesh(new THREE.BoxGeometry(3.4, 4.4, 0.16), this.pillarMaterial);
+          const winZ = zWall + (isNorth ? 0.56 : -0.56);
+          const winFrame = new THREE.Mesh(this.createTiledBoxGeometry(3.4, 4.4, 0.16, 2.8), this.pillarMaterial);
           winFrame.position.set(x, y + wallH * 0.52, winZ);
           const winGlass = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 3.7), this.stainedGlassMaterial);
           winGlass.position.set(x, y + wallH * 0.52, winZ + (isNorth ? 0.1 : -0.1));
@@ -1466,8 +1601,8 @@ export class CastleLevel {
           this.createWall(xWall, y - 5.0, z, 1.0, d + 1.0, wallH + 5.0, true, 12.0);
         }
         if (d >= 18) {
-          const winX = xWall + (isWest ? 0.54 : -0.54);
-          const winFrame = new THREE.Mesh(new THREE.BoxGeometry(0.16, 4.4, 3.4), this.pillarMaterial);
+          const winX = xWall + (isWest ? 0.56 : -0.56);
+          const winFrame = new THREE.Mesh(this.createTiledBoxGeometry(0.16, 4.4, 3.4, 2.8), this.pillarMaterial);
           winFrame.position.set(winX, y + wallH * 0.52, z);
           const winGlass = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 3.7), this.stainedGlassMaterial);
           winGlass.rotation.y = Math.PI / 2;
@@ -1518,14 +1653,14 @@ export class CastleLevel {
         this.createWall(edge.x - corrW / 2 - 0.45, yMin - 5.0, zMid, 0.9, corrLen + 0.5, totalWallH, true, 12.0);
         this.createWall(edge.x + corrW / 2 + 0.45, yMin - 5.0, zMid, 0.9, corrLen + 0.5, totalWallH, true, 12.0);
 
-        const ceilGeo = new THREE.PlaneGeometry(corrW + 1.2, corrLen + 0.8);
+        const ceilGeo = this.createTiledPlaneGeometry(corrW + 1.2, corrLen + 0.8, 3.4);
         ceilGeo.rotateX(Math.PI / 2);
         const ceilMesh = new THREE.Mesh(ceilGeo, this.ceilMaterial);
         ceilMesh.position.set(edge.x, yMax + wallH, zMid);
         this.stageGroup.add(ceilMesh);
 
         // Central corridor stone rib arch
-        const rib = new THREE.Mesh(new THREE.BoxGeometry(corrW + 0.4, 0.55, 0.75), this.pillarMaterial);
+        const rib = new THREE.Mesh(this.createTiledBoxGeometry(corrW + 0.4, 0.55, 0.75, 3.0), this.pillarMaterial);
         rib.position.set(edge.x, yAvg + 5.6, zMid);
         this.stageGroup.add(rib);
       }
@@ -1554,13 +1689,13 @@ export class CastleLevel {
         this.createWall(xMid, yMin - 5.0, edge.z - corrW / 2 - 0.45, corrLen + 0.5, 0.9, totalWallH, true, 12.0);
         this.createWall(xMid, yMin - 5.0, edge.z + corrW / 2 + 0.45, corrLen + 0.5, 0.9, totalWallH, true, 12.0);
 
-        const ceilGeo = new THREE.PlaneGeometry(corrLen + 0.8, corrW + 1.2);
+        const ceilGeo = this.createTiledPlaneGeometry(corrLen + 0.8, corrW + 1.2, 3.4);
         ceilGeo.rotateX(Math.PI / 2);
         const ceilMesh = new THREE.Mesh(ceilGeo, this.ceilMaterial);
         ceilMesh.position.set(xMid, yMax + wallH, edge.z);
         this.stageGroup.add(ceilMesh);
 
-        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.55, corrW + 0.4), this.pillarMaterial);
+        const rib = new THREE.Mesh(this.createTiledBoxGeometry(0.75, 0.55, corrW + 0.4, 3.0), this.pillarMaterial);
         rib.position.set(xMid, yAvg + 5.6, edge.z);
         this.stageGroup.add(rib);
       }
@@ -2279,7 +2414,7 @@ export class CastleLevel {
       { y: 16.8, z: -26 },
       { y: 25.5, z: -64 }
     ].forEach((a) => {
-      const arch = new THREE.Mesh(new THREE.BoxGeometry(8.8, 1.4, 1.4), this.activeWallMat);
+      const arch = new THREE.Mesh(this.createTiledBoxGeometry(8.8, 1.4, 1.4, 3.0), this.activeWallMat);
       arch.position.set(0, a.y, a.z);
       this.stageGroup.add(arch);
     });
