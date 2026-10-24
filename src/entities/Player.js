@@ -692,6 +692,10 @@ export class Player {
   }
 
   checkWallCollision(pos, walls, doors) {
+    if (this.level && this.level.isWithinStageBounds && !this.level.isWithinStageBounds(pos.x, pos.z, 0.0)) {
+      return true;
+    }
+
     const feetY = pos.y - this.playerHeight + 0.35;
     const headY = pos.y + 0.15;
     const playerBox = new THREE.Box3(

@@ -409,7 +409,7 @@ export class HUD {
 
     const cx = w / 2;
     const cy = h / 2;
-    const scale = 1.05;
+    const scale = 0.96;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -450,8 +450,18 @@ export class HUD {
       });
     }
 
+    const stg = this.level.currentStageId;
+    const roomFill = stg === 'stage2'
+      ? 'rgba(64, 24, 16, 0.88)'
+      : stg === 'stage3'
+        ? 'rgba(16, 52, 36, 0.88)'
+        : stg === 'stage4'
+          ? 'rgba(18, 44, 68, 0.88)'
+          : stg === 'stage5'
+            ? 'rgba(42, 20, 64, 0.88)'
+            : 'rgba(26, 34, 52, 0.88)';
     ctx.strokeStyle = 'rgba(205, 165, 90, 0.90)';
-    ctx.fillStyle = 'rgba(26, 34, 52, 0.88)';
+    ctx.fillStyle = roomFill;
     ctx.lineWidth = 1.6;
 
     const rooms = this.level.minimapRooms || [];
@@ -461,6 +471,24 @@ export class HUD {
       ctx.fillRect(rx, rz, r.rw * scale, r.rd * scale);
       ctx.strokeRect(rx, rz, r.rw * scale, r.rd * scale);
     });
+
+    // Draw Elemental Hazard Basins on Automap
+    if (this.level.hazardZones) {
+      this.level.hazardZones.forEach(hz => {
+        ctx.fillStyle = hz.type === 'lava'
+          ? 'rgba(255, 70, 0, 0.45)'
+          : hz.type === 'acid'
+            ? 'rgba(30, 220, 80, 0.42)'
+            : hz.type === 'frost'
+              ? 'rgba(0, 170, 255, 0.42)'
+              : 'rgba(110, 30, 200, 0.45)';
+        const rx = (hz.xMin - px) * scale;
+        const rz = (hz.zMin - pz) * scale;
+        const rw = (hz.xMax - hz.xMin) * scale;
+        const rd = (hz.zMax - hz.zMin) * scale;
+        ctx.fillRect(rx, rz, rw, rd);
+      });
+    }
 
     // Draw 3D Jump Platforms on Automap
     if (this.level.heightZones) {
@@ -636,9 +664,9 @@ export class HUD {
         if (this.level.graphEdges && this.level.graphEdges.length > 0) {
           d.objGraph.innerText = `[GRAPH SEED #${this.level.currentSeed % 1000}] ${this.level.minimapRooms.length} Nodes | ${this.level.graphEdges.length} Edges`;
         } else if (this.level.currentStageId === 'stage5') {
-          d.objGraph.innerText = `[CITADEL SEED #${this.level.currentSeed % 1000}] Boss Sanctum | LOS Raycast`;
+          d.objGraph.innerText = `[CITADEL SEED #${this.level.currentSeed % 1000}] Boss Sanctum + 2 Reliquary Wings`;
         } else {
-          d.objGraph.innerText = `[OVERWORLD] Exterior Spire Stairway`;
+          d.objGraph.innerText = `[OVERWORLD] 6 Terraces + 4 Branching Side Courtyards`;
         }
       }
       if (d.scoreDisplay) d.scoreDisplay.innerText = `SCORE: ${this.player.score}`;
