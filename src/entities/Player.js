@@ -36,9 +36,14 @@ export class Player {
     this.levelUpTitle = '';
     this.levelUpSubtitle = '';
 
+    // Timed Special Damage Potion State (Arcane Overdrive Elixir: 2.5x Spell Damage)
+    this.overdriveTimer = 0;
+    this.overdriveMaxDuration = 12.0;
+    this.overdriveMultiplier = 2.5;
+
     // Retro Dungeon-Crawler Physics + 3D Platforming Jump & Jump Dash
     this.walkSpeed = 4.35;
-    this.sprintMultiplier = 1.35;
+    this.sprintMultiplier = 1.48;
     this.jumpForce = 8.4;
     this.gravity = 18.0;
     this.isGrounded = true;
@@ -178,8 +183,8 @@ export class Player {
     this.hasAirDashed = false;
 
     this.levelUpTimer = 3.8;
-    this.levelUpTitle = fromCheatCode ? 'CHEAT CODE 5555 ACTIVATED' : 'DEBUG JUMP DASH ENABLED';
-    this.levelUpSubtitle = 'AETHER JUMP DASH UNLOCKED [SHIFT IN AIR OR 2x SHIFT ON GROUND]';
+    this.levelUpTitle = fromCheatCode ? 'CHEAT CODE 5555 ACTIVATED' : 'DEBUG DASH ENABLED';
+    this.levelUpSubtitle = 'AETHER DASH UNLOCKED [PRESS SHIFT TO DASH, HOLD SHIFT TO RUN]';
 
     audioSynth.playGrimoirePickup();
     if (this.spellSystem && this.spellSystem.postProcessor) {
@@ -188,7 +193,7 @@ export class Player {
     if (this.spellSystem && this.spellSystem.telemetry) {
       this.spellSystem.telemetry.spawnFloatingText(
         this.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
-        fromCheatCode ? 'CHEAT 5555: JUMP DASH UNLOCKED!' : 'DEBUG: JUMP DASH ENABLED!',
+        fromCheatCode ? 'CHEAT 5555: DASH UNLOCKED!' : 'DEBUG: DASH ENABLED!',
         '#00ffcc',
         1.35
       );
@@ -196,14 +201,14 @@ export class Player {
   }
 
   /**
-   * Executes an Aether Jump Dash in the movement or look direction
+   * Executes a Ground Dash (horizontal burst staying on the floor/stairs) when grounded,
+   * or an aerial Jump Dash when airborne. Holding Shift after the dash continues sprinting.
    */
-  triggerJumpDash() {
+  triggerJumpDash(silentIfLocked = false) {
     if (!this.jumpDashUnlocked) {
-      if (this.spellSystem && this.spellSystem.telemetry) {
-        this.spellSystem.telemetry.registerHit(
-          true,
-          'JUMP DASH LOCKED — COLLECT 2ND GRIMOIRE OR INPUT CHEAT 5555'
+      if (!silentIfLocked && this.spellSystem && this.spellSystem.telemetry) {
+        this.spellSystem.telemetry.showNotice(
+          'DASH LOCKED — COLLECT 2ND GRIMOIRE OR INPUT CHEAT 5555'
         );
       }
       return false;
@@ -228,27 +233,37 @@ export class Player {
     const yawRotation = new THREE.Euler(0, this.euler.y, 0, 'YXZ');
     dir.applyEuler(yawRotation).normalize();
 
+    const wasGrounded = this.isGrounded;
     this.dashVector.copy(dir);
-    this.dashTimer = 0.24;
+    this.dashTimer = 0.22;
     this.velocity.x = dir.x * this.dashSpeed;
     this.velocity.z = dir.z * this.dashSpeed;
-    this.velocity.y = Math.max(this.velocity.y, 5.8);
-    this.isGrounded = false;
-    this.coyoteTimer = 0;
-    this.hasAirDashed = true;
+
+    if (wasGrounded) {
+      // Ground Dash: stay strictly grounded along the floor/stairs with zero vertical jump pop
+      this.velocity.y = 0;
+      this.isGrounded = true;
+    } else {
+      // Aerial Jump Dash: upward impulse in mid-air
+      this.velocity.y = Math.max(this.velocity.y, 5.4);
+      this.isGrounded = false;
+      this.coyoteTimer = 0;
+      this.hasAirDashed = true;
+    }
+
     this.jumpDashCooldown = this.jumpDashMaxCooldown;
 
     audioSynth.playAegisCast();
     if (this.spellSystem) {
       if (this.spellSystem.postProcessor) {
-        this.spellSystem.postProcessor.triggerChromaticPulse(0.7);
+        this.spellSystem.postProcessor.triggerChromaticPulse(0.65);
       }
       const sparkOrigin = this.position.clone().add(new THREE.Vector3(0, -0.4, 0));
       this.spellSystem.createSparks(sparkOrigin, 0x00ffcc, 12);
       if (this.spellSystem.telemetry) {
         this.spellSystem.telemetry.spawnFloatingText(
           this.position.clone().add(dir.clone().multiplyScalar(1.8)),
-          'JUMP DASH',
+          wasGrounded ? 'DASH' : 'JUMP DASH',
           '#55ffff',
           1.1
         );
@@ -320,18 +335,9 @@ export class Player {
         case 'ShiftRight':
           this.keys.sprint = true;
           if (!e.repeat) {
-            const nowMs = performance.now();
-            if (!this.isGrounded) {
-              // Shift while in air triggers Jump Dash immediately
-              this.triggerJumpDash();
-              this.lastShiftTapTime = 0;
-            } else if (nowMs - this.lastShiftTapTime <= 420) {
-              // Double-press Shift while on ground triggers Jump Dash
-              this.triggerJumpDash();
-              this.lastShiftTapTime = 0;
-            } else {
-              this.lastShiftTapTime = nowMs;
-            }
+            // Single Shift press triggers Dash (Ground Dash on floor, Jump Dash in air);
+            // holding Shift after the dash finishes continues running!
+            this.triggerJumpDash(true);
           }
           break;
         case 'Space':
@@ -430,8 +436,7 @@ export class Player {
 
     if (!spell.unlocked) {
       if (this.spellSystem && this.spellSystem.telemetry) {
-        this.spellSystem.telemetry.registerHit(
-          true,
+        this.spellSystem.telemetry.showNotice(
           `${spell.name.toUpperCase()} LOCKED — COLLECT AN ELDER GRIMOIRE TO UNLOCK`
         );
       }
@@ -476,7 +481,7 @@ export class Player {
 
     if (stageId === 'stage2' && !this.jumpDashUnlocked) {
       this.jumpDashUnlocked = true;
-      return `GRIMOIRE RECOVERED: UNLOCKED JUMP DASH [SHIFT IN AIR / 2x SHIFT]`;
+      return `GRIMOIRE RECOVERED: UNLOCKED DASH [SHIFT TO DASH / HOLD SHIFT TO RUN]`;
     }
 
     // 1. Frost Lance (Ice)
@@ -489,7 +494,7 @@ export class Player {
     // 2. Jump Dash (Unlocked with 2nd Grimoire, between Ice and Lightning!)
     if (!this.jumpDashUnlocked) {
       this.jumpDashUnlocked = true;
-      return `GRIMOIRE RECOVERED: UNLOCKED JUMP DASH [SHIFT IN AIR / 2x SHIFT]`;
+      return `GRIMOIRE RECOVERED: UNLOCKED DASH [SHIFT TO DASH / HOLD SHIFT TO RUN]`;
     }
 
     // 3. Arcane Arc (Lightning)
@@ -513,6 +518,67 @@ export class Player {
     return `ALL GRIMOIRES RECOVERED: ARCHMAGE OVERDRIVE ACTIVE`;
   }
 
+  /**
+   * Ensures all 4 spells + Aether Dash are unlocked when entering Stage V (World Boss Arena)
+   * so the player can always counter every Elemental Block & Crystal Constellation.
+   */
+  unlockAllSpellsForBoss() {
+    let anyNewlyUnlocked = false;
+    for (let i = 0; i < this.spells.length; i++) {
+      if (!this.spells[i].unlocked) {
+        this.spells[i].unlocked = true;
+        anyNewlyUnlocked = true;
+      }
+    }
+    if (!this.jumpDashUnlocked) {
+      this.jumpDashUnlocked = true;
+      anyNewlyUnlocked = true;
+    }
+    if (this.grimoiresCollected < 4) {
+      this.grimoiresCollected = 4;
+    }
+    if (anyNewlyUnlocked) {
+      this.baseMaxMana = 140;
+      this.maxMana = Number((this.baseMaxMana * this.statMultiplier).toFixed(1));
+      this.mana = this.maxMana;
+      this.manaRegenRate = 15;
+    }
+  }
+
+  /**
+   * Activates a timed Crimson Overdrive Elixir (2.5x Spell Damage + 2x Mana Regen + Cooldown Haste)
+   */
+  activateOverdrivePotion(duration = 12.0) {
+    this.overdriveMaxDuration = duration;
+    this.overdriveTimer = Math.max(this.overdriveTimer, duration);
+    this.mana = Math.min(this.maxMana, this.mana + 55);
+    this.health = Math.min(this.maxHealth, this.health + 20);
+
+    audioSynth.playGrimoirePickup();
+    if (this.spellSystem) {
+      if (this.spellSystem.postProcessor) {
+        this.spellSystem.postProcessor.triggerChromaticPulse(1.0);
+      }
+      this.spellSystem.createSparks(this.position.clone().add(new THREE.Vector3(0, -0.3, 0)), 0xffaa00, 18);
+      if (this.spellSystem.telemetry) {
+        this.spellSystem.telemetry.showNotice(
+          `OVERDRIVE ELIXIR ACTIVE: 2.5x SPELL DAMAGE & FAST MANA (${Math.round(duration)}s)`,
+          3.2
+        );
+        this.spellSystem.telemetry.spawnFloatingText(
+          this.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
+          `OVERDRIVE! 2.5X SPELL DMG (${Math.round(duration)}s)`,
+          '#ffdd22',
+          1.45
+        );
+      }
+    }
+  }
+
+  getEffectiveSpellMultiplier() {
+    return this.statMultiplier * (this.overdriveTimer > 0 ? this.overdriveMultiplier : 1.0);
+  }
+
   castActiveSpell() {
     const spell = this.spells[this.activeSpellIndex];
     if (!spell || !spell.unlocked) return false;
@@ -520,7 +586,8 @@ export class Player {
     if (this.mana < spell.manaCost) return false;
 
     this.mana -= spell.manaCost;
-    this.spellCooldowns[this.activeSpellIndex] = spell.cooldown;
+    const cooldownHaste = this.overdriveTimer > 0 ? 0.78 : 1.0;
+    this.spellCooldowns[this.activeSpellIndex] = spell.cooldown * cooldownHaste;
 
     this.viewmodel.triggerCast(spell.id);
 
@@ -531,16 +598,17 @@ export class Player {
     const activeEnemies = this.enemyManager ? this.enemyManager.getAliveEnemies() : [];
     const walls = this.level ? this.level.walls : [];
     const destructibles = this.level ? this.level.destructibles : [];
+    const effectiveMult = this.getEffectiveSpellMultiplier();
 
-    // Apply character level statMultiplier (+1% per level) to all spells
+    // Apply character level statMultiplier (+1% per level) and Overdrive Potion (2.5x) to all spells
     if (spell.id === 'fireball') {
-      this.spellSystem.castPyrobomb(origin, forward, this.statMultiplier);
+      this.spellSystem.castPyrobomb(origin, forward, effectiveMult);
     } else if (spell.id === 'frost') {
-      this.spellSystem.castFrostLance(origin, forward, this.statMultiplier);
+      this.spellSystem.castFrostLance(origin, forward, effectiveMult);
     } else if (spell.id === 'lightning') {
-      this.spellSystem.castArcaneLightning(origin, forward, activeEnemies, walls, destructibles, this.statMultiplier, this);
+      this.spellSystem.castArcaneLightning(origin, forward, activeEnemies, walls, destructibles, effectiveMult, this);
     } else if (spell.id === 'aegis') {
-      this.spellSystem.castAegisShield(this, activeEnemies, this.statMultiplier);
+      this.spellSystem.castAegisShield(this, activeEnemies, effectiveMult);
     }
 
     return true;
@@ -585,9 +653,10 @@ export class Player {
       }
     }
 
-    // 1. Mana regeneration
+    // 1. Mana regeneration (1.8x faster while Overdrive Potion is active)
     if (this.mana < this.maxMana) {
-      this.mana = Math.min(this.maxMana, this.mana + this.manaRegenRate * delta);
+      const regenMult = this.overdriveTimer > 0 ? 1.8 : 1.0;
+      this.mana = Math.min(this.maxMana, this.mana + this.manaRegenRate * regenMult * delta);
     }
 
     // 2. Spell & Jump Dash Cooldown & Status Timers
@@ -601,6 +670,7 @@ export class Player {
     if (this.hurtTimer > 0) this.hurtTimer -= delta;
     if (this.levelUpTimer > 0) this.levelUpTimer = Math.max(0, this.levelUpTimer - delta);
     if (this.chillTimer > 0) this.chillTimer = Math.max(0, this.chillTimer - delta);
+    if (this.overdriveTimer > 0) this.overdriveTimer = Math.max(0, this.overdriveTimer - delta);
 
     // 3. Movement & Active Jump Dash Impulse Calculation
     const moveVector = new THREE.Vector3();
@@ -652,28 +722,51 @@ export class Player {
       this.velocity.y -= this.gravity * (this.dashTimer > 0 ? 0.35 : 1.0) * delta;
     }
 
-    const stepX = this.velocity.x * delta;
-    const stepZ = this.velocity.z * delta;
+    // Sub-step horizontal movement during dashes so stairs and wall collisions are tracked seamlessly
+    const moveSteps = this.dashTimer > 0 ? 3 : 1;
+    const subStepX = (this.velocity.x * delta) / moveSteps;
+    const subStepZ = (this.velocity.z * delta) / moveSteps;
     const stepY = this.velocity.y * delta;
 
-    const testPosX = this.position.clone();
-    testPosX.x += stepX;
-    if (!this.checkWallCollision(testPosX, walls, doors)) {
-      this.position.x = testPosX.x;
+    for (let s = 0; s < moveSteps; s++) {
+      const testPosX = this.position.clone();
+      testPosX.x += subStepX;
+      if (!this.checkWallCollision(testPosX, walls, doors)) {
+        this.position.x = testPosX.x;
+      }
+
+      const testPosZ = this.position.clone();
+      testPosZ.z += subStepZ;
+      if (!this.checkWallCollision(testPosZ, walls, doors)) {
+        this.position.z = testPosZ.z;
+      }
+
+      if (this.level && this.level.getFloorHeight) {
+        const feetNow = this.position.y - this.playerHeight;
+        const stepFloor = this.level.getFloorHeight(
+          this.position.x,
+          this.position.z,
+          Math.max(feetNow, this.currentFloorY)
+        );
+        // Immediately follow rising stairs during a dash/walk so the player never clips into steps
+        if (this.isGrounded || stepFloor > feetNow) {
+          if (stepFloor >= this.currentFloorY - 0.55 && stepFloor <= this.currentFloorY + 1.45) {
+            this.currentFloorY = stepFloor;
+            const targetEyeY = this.currentFloorY + this.playerHeight;
+            if (targetEyeY > this.position.y) {
+              this.position.y = targetEyeY;
+            }
+          }
+        }
+      }
     }
 
-    const testPosZ = this.position.clone();
-    testPosZ.z += stepZ;
-    if (!this.checkWallCollision(testPosZ, walls, doors)) {
-      this.position.z = testPosZ.z;
-    }
-
-    const nextFeetY = currentFeetY + (this.isGrounded ? 0 : stepY);
+    const nextFeetY = (this.position.y - this.playerHeight) + (this.isGrounded ? 0 : stepY);
     this.currentFloorY = (this.level && this.level.getFloorHeight)
-      ? this.level.getFloorHeight(this.position.x, this.position.z, Math.max(currentFeetY, nextFeetY))
+      ? this.level.getFloorHeight(this.position.x, this.position.z, Math.max(currentFeetY, nextFeetY, this.currentFloorY))
       : 0;
 
-    if (this.isGrounded && this.currentFloorY < prevFloorY - 0.65) {
+    if (this.isGrounded && this.currentFloorY < prevFloorY - 0.65 && this.dashTimer <= 0) {
       this.isGrounded = false;
       this.coyoteTimer = 0.18;
     }
@@ -682,7 +775,11 @@ export class Player {
 
     if (this.isGrounded) {
       this.hasAirDashed = false;
-      this.position.y = THREE.MathUtils.lerp(this.position.y, minEyeY, Math.min(1, delta * 28.0));
+      if (minEyeY >= this.position.y - 0.04 || this.dashTimer > 0) {
+        this.position.y = minEyeY;
+      } else {
+        this.position.y = THREE.MathUtils.lerp(this.position.y, minEyeY, Math.min(1, delta * 32.0));
+      }
       if (this.jumpBufferTimer > 0) {
         this.velocity.y = this.jumpForce;
         this.isGrounded = false;
@@ -690,7 +787,7 @@ export class Player {
       }
     } else {
       this.position.y += stepY;
-      if (this.velocity.y <= 0 && this.position.y <= minEyeY + 0.08) {
+      if (this.position.y <= minEyeY + 0.08 && (this.velocity.y <= 0 || minEyeY > prevFloorY + this.playerHeight + 0.05)) {
         this.position.y = minEyeY;
         this.velocity.y = 0;
         this.isGrounded = true;

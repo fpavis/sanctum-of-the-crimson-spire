@@ -436,6 +436,10 @@ class GameApp {
       customSpawn = { x: 0, y: 17.5, z: -55.5, yaw: 0, pitch: 0.10 };
     }
 
+    if (actualStageId === 'stage5' && this.player && this.player.unlockAllSpellsForBoss) {
+      this.player.unlockAllSpellsForBoss();
+    }
+
     const stageData = this.level.loadStage(actualStageId);
     const sp = customSpawn || stageData.spawn;
 

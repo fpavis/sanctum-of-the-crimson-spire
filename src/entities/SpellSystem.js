@@ -14,6 +14,7 @@ export class SpellSystem {
     this.lightningEffects = [];
     this.particles = [];
     this.debrisChunks = [];
+    this.shockwaves = [];
 
     this.projGeometry = new THREE.PlaneGeometry(0.85, 0.85);
     this.impactGeometry = new THREE.PlaneGeometry(1.6, 1.6);
@@ -23,14 +24,44 @@ export class SpellSystem {
     this.projMaterials = [0, 1, 2, 3].map((frameIdx) => {
       const tex = this.projectileTexture.clone();
       tex.needsUpdate = true;
-      tex.repeat.set(1 / 4, 1);
-      tex.offset.set(frameIdx / 4, 0);
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.repeat.set(0.96 / 4, 0.96);
+      tex.offset.set((frameIdx + 0.02) / 4, 0.02);
       return new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
         alphaTest: 0.05,
         side: THREE.DoubleSide
       });
+    });
+
+    // Shared 3D Frost Lance & Poison Orb Materials
+    this.frostSpearOuterMat = new THREE.MeshBasicMaterial({
+      color: 0x55f0ff,
+      transparent: true,
+      opacity: 0.94
+    });
+    this.frostSpearCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff
+    });
+    this.frostSpearFinMat = new THREE.MeshBasicMaterial({
+      color: 0x00ccff,
+      side: THREE.DoubleSide
+    });
+
+    this.poisonCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xd8ff33
+    });
+    this.poisonCageMat = new THREE.MeshBasicMaterial({
+      color: 0x18ff44,
+      wireframe: true
+    });
+    this.poisonHaloMat = new THREE.MeshBasicMaterial({
+      color: 0x22ff55,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide
     });
 
     this.activeSpellLight = new THREE.PointLight(0xff6611, 0, 11);
@@ -79,12 +110,88 @@ export class SpellSystem {
     });
   }
 
+  /**
+   * Builds a true 3D forward-pointing crystalline Frost Lance spear oriented along +Z (lookAt target)
+   */
+  createFrostLanceMesh(scale = 1.0) {
+    const root = new THREE.Group();
+    const spinGroup = new THREE.Group();
+    root.add(spinGroup);
+
+    // Forward-pointing 6-faceted crystal spearhead (+Z tip)
+    const tipGeo = new THREE.ConeGeometry(0.18 * scale, 1.05 * scale, 6);
+    tipGeo.rotateX(Math.PI / 2);
+    const tipMesh = new THREE.Mesh(tipGeo, this.frostSpearOuterMat);
+    tipMesh.position.z = 0.28 * scale;
+    spinGroup.add(tipMesh);
+
+    // Bright pure-white inner ice core
+    const coreGeo = new THREE.ConeGeometry(0.10 * scale, 0.88 * scale, 6);
+    coreGeo.rotateX(Math.PI / 2);
+    const coreMesh = new THREE.Mesh(coreGeo, this.frostSpearCoreMat);
+    coreMesh.position.z = 0.22 * scale;
+    spinGroup.add(coreMesh);
+
+    // Rear tapered crystal tail (-Z point)
+    const tailGeo = new THREE.ConeGeometry(0.15 * scale, 0.52 * scale, 6);
+    tailGeo.rotateX(-Math.PI / 2);
+    const tailMesh = new THREE.Mesh(tailGeo, this.frostSpearFinMat);
+    tailMesh.position.z = -0.36 * scale;
+    spinGroup.add(tailMesh);
+
+    // 4 Radial Crystalline Fins around the shaft
+    const finGeoH = new THREE.BoxGeometry(0.52 * scale, 0.04 * scale, 0.46 * scale);
+    const finH = new THREE.Mesh(finGeoH, this.frostSpearFinMat);
+    finH.position.z = -0.06 * scale;
+    spinGroup.add(finH);
+
+    const finGeoV = new THREE.BoxGeometry(0.04 * scale, 0.52 * scale, 0.46 * scale);
+    const finV = new THREE.Mesh(finGeoV, this.frostSpearFinMat);
+    finV.position.z = -0.06 * scale;
+    spinGroup.add(finV);
+
+    return { root, spinGroup };
+  }
+
+  /**
+   * Builds a high-visibility opaque 3D Toxic-Green Poison Orb for Skeleton Sorcerers
+   */
+  createPoisonOrbMesh() {
+    const root = new THREE.Group();
+    const spinGroup = new THREE.Group();
+    root.add(spinGroup);
+
+    // Solid opaque bright lime-green toxic core
+    const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.poisonCoreMat);
+    spinGroup.add(coreMesh);
+
+    // Spinning faceted toxic emerald outer cage
+    const cageMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 0), this.poisonCageMat);
+    spinGroup.add(cageMesh);
+
+    // 3 Orbiting Venom Droplets
+    for (let i = 0; i < 3; i++) {
+      const ang = (i * Math.PI * 2) / 3;
+      const drop = new THREE.Mesh(new THREE.SphereGeometry(0.085, 6, 6), this.poisonCoreMat);
+      drop.position.set(Math.cos(ang) * 0.44, Math.sin(ang) * 0.44, 0);
+      spinGroup.add(drop);
+    }
+
+    // Billboarded outer glowing poison ring
+    const haloMesh = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.46, 16), this.poisonHaloMat);
+    root.add(haloMesh);
+
+    return { root, spinGroup, haloMesh };
+  }
+
   castFrostLance(origin, direction, statMultiplier = 1.0) {
     audioSynth.playFrostCast();
 
-    const mesh = new THREE.Mesh(this.projGeometry, this.projMaterials[1]);
-    mesh.position.copy(origin);
-    this.scene.add(mesh);
+    const dir = direction.clone().normalize();
+    const { root, spinGroup } = this.createFrostLanceMesh(1.0);
+    root.position.copy(origin);
+    root.lookAt(origin.clone().add(dir));
+    this.scene.add(root);
 
     this.activeSpellLight.color.setHex(0x22ddff);
     this.activeSpellLight.intensity = 2.6;
@@ -92,9 +199,12 @@ export class SpellSystem {
 
     this.projectiles.push({
       type: 'frost',
-      mesh,
+      mesh: root,
+      spinGroup,
+      orientToDirection: true,
+      trailTimer: 0,
       ownsLight: true,
-      direction: direction.clone().normalize(),
+      direction: dir,
       speed: 19.5,
       damage: Math.round(40 * statMultiplier),
       radius: 0.40,
@@ -119,23 +229,60 @@ export class SpellSystem {
     this.particles = [];
     for (const d of this.debrisChunks) this.scene.remove(d.mesh);
     this.debrisChunks = [];
+    for (const sw of this.shockwaves) {
+      this.scene.remove(sw.mesh);
+      sw.mesh.geometry.dispose();
+      sw.mesh.material.dispose();
+    }
+    this.shockwaves = [];
     this.activeSpellLight.intensity = 0;
+  }
+
+  castBossShockwaveRing(origin, colorHex = 0xff5511, maxRadius = 22.0, speed = 11.5, damage = 18) {
+    const geo = new THREE.TorusGeometry(1.0, 0.14, 8, 36);
+    geo.rotateX(Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.92
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(origin.x, origin.y + 0.22, origin.z);
+    this.scene.add(mesh);
+
+    this.shockwaves.push({
+      mesh,
+      origin: origin.clone(),
+      radius: 1.0,
+      maxRadius,
+      speed,
+      damage,
+      hitPlayer: false
+    });
   }
 
   castArcaneLightning(origin, direction, enemies, walls, destructibles = [], statMultiplier = 1.0, player = null) {
     audioSynth.playLightningCast();
     if (this.postProcessor) this.postProcessor.triggerChromaticPulse(0.6);
 
-    const raycaster = new THREE.Raycaster(origin, direction.clone().normalize(), 0.1, 42);
+    const raycaster = new THREE.Raycaster(origin, direction.clone().normalize(), 0.1, 48);
     const wallMeshes = walls || [];
     const enemyHitBoxes = enemies.map((e) => e.hitMesh || e.sprite.mesh);
-    const destructibleMeshes = destructibles.filter((d) => !d.destroyed).map((d) => d.mesh);
+    const destructibleMeshes = destructibles.filter((d) => !d.destroyed).map((d) => d.hitMesh || d.mesh);
+    const buttons = player && player.level && player.level.shootableButtons ? player.level.shootableButtons : [];
+    const buttonMeshes = buttons.map((b) => b.hitMesh || b.mesh);
 
-    const intersects = raycaster.intersectObjects([...enemyHitBoxes, ...destructibleMeshes, ...wallMeshes]);
+    const intersects = raycaster.intersectObjects([
+      ...enemyHitBoxes,
+      ...destructibleMeshes,
+      ...buttonMeshes,
+      ...wallMeshes
+    ]);
 
     let targetPoint = origin.clone().add(direction.clone().normalize().multiplyScalar(36));
     let hitEnemy = null;
     let hitDestructible = null;
+    let hitButton = null;
 
     if (intersects.length > 0) {
       const hit = intersects[0];
@@ -150,8 +297,17 @@ export class SpellSystem {
 
       if (!hitEnemy) {
         for (const d of destructibles) {
-          if (d.mesh === hit.object && !d.destroyed) {
+          if ((d.hitMesh === hit.object || d.mesh === hit.object) && !d.destroyed) {
             hitDestructible = d;
+            break;
+          }
+        }
+      }
+
+      if (!hitEnemy && !hitDestructible) {
+        for (const b of buttons) {
+          if (b.hitMesh === hit.object || b.mesh === hit.object) {
+            hitButton = b;
             break;
           }
         }
@@ -162,12 +318,16 @@ export class SpellSystem {
     this.createSparks(targetPoint, 0xaa44ff, 12);
 
     if (hitDestructible) {
-      hitDestructible.takeDamage(Math.round(70 * statMultiplier), this);
+      hitDestructible.takeDamage(Math.round(70 * statMultiplier), this, 'lightning');
+    }
+
+    if (hitButton && hitButton.trigger) {
+      hitButton.trigger(this, player);
     }
 
     if (hitEnemy && !hitEnemy.isDead) {
       const wasFrozen = hitEnemy.slowTimer > 0;
-      hitEnemy.takeDamage(Math.round(68 * statMultiplier), 'lightning', player);
+      hitEnemy.takeDamage(Math.round(72 * statMultiplier), 'lightning', player);
 
       if (wasFrozen) {
         if (this.telemetry) {
@@ -180,16 +340,21 @@ export class SpellSystem {
           );
         }
 
+        // Direct Superconduct Overload surge on the primary frozen target (especially devastating against Boss Combo Shields!)
+        if (!hitEnemy.isDead) {
+          hitEnemy.takeDamage(Math.round(88 * statMultiplier), 'synergy_superconduct', player);
+        }
+
         let chainCount = 0;
         for (const other of enemies) {
           if (other === hitEnemy || other.isDead) continue;
           const dist = other.position.distanceTo(hitEnemy.position);
-          if (dist < 11.5 && chainCount < 3) {
+          if (dist < 14.5 && chainCount < 3) {
             chainCount++;
             const pA = hitEnemy.position.clone().add(new THREE.Vector3(0, 1.3, 0));
             const pB = other.position.clone().add(new THREE.Vector3(0, 1.3, 0));
             this.createLightningBolt(pA, pB, 0x00ffff);
-            other.takeDamage(Math.round(54 * statMultiplier), 'lightning', player);
+            other.takeDamage(Math.round(62 * statMultiplier), 'synergy_superconduct', player);
             other.applySlow(0.5, 2.5);
           }
         }
@@ -240,10 +405,13 @@ export class SpellSystem {
       for (const enemy of enemies) {
         if (enemy.isDead) continue;
         const d = enemy.position.distanceTo(player.position);
-        if (d < 6.5) {
+        const reach = enemy.type === 'arcane_eye' ? 9.5 : 6.5;
+        if (d < reach) {
           const pushDir = new THREE.Vector3().subVectors(enemy.position, player.position).normalize();
-          enemy.position.addScaledVector(pushDir, 3.2);
-          enemy.takeDamage(Math.round(38 * statMultiplier), 'frost', player);
+          if (enemy.type !== 'arcane_eye') {
+            enemy.position.addScaledVector(pushDir, 3.2);
+          }
+          enemy.takeDamage(Math.round(52 * statMultiplier), 'synergy_aegis_nova', player);
           enemy.applySlow(0.4, 3.0);
         }
       }
@@ -284,15 +452,43 @@ export class SpellSystem {
       speed = 10.8;
     }
 
-    const mesh = new THREE.Mesh(this.projGeometry, this.projMaterials[matIdx]);
+    const dir = direction.clone().normalize();
+    let mesh = null;
+    let spinGroup = null;
+    let haloMesh = null;
+    let orientToDirection = false;
+
+    if (type === 'soul') {
+      // High-visibility opaque 3D Toxic-Green Poison Orb for Skeleton Sorcerer
+      const orb = this.createPoisonOrbMesh();
+      mesh = orb.root;
+      spinGroup = orb.spinGroup;
+      haloMesh = orb.haloMesh;
+    } else if (type === 'wraith_frost') {
+      // Forward-pointing 3D Ice Shard for Frost Wraith
+      const lance = this.createFrostLanceMesh(0.78);
+      mesh = lance.root;
+      spinGroup = lance.spinGroup;
+      orientToDirection = true;
+    } else {
+      mesh = new THREE.Mesh(this.projGeometry, this.projMaterials[matIdx]);
+    }
+
     mesh.position.copy(origin);
+    if (orientToDirection) {
+      mesh.lookAt(origin.clone().add(dir));
+    }
     this.scene.add(mesh);
 
     this.projectiles.push({
       type,
       mesh,
+      spinGroup,
+      haloMesh,
+      orientToDirection,
+      trailTimer: 0,
       ownsLight: false,
-      direction: direction.clone().normalize(),
+      direction: dir,
       speed,
       damage,
       radius: 0.35,
@@ -458,6 +654,44 @@ export class SpellSystem {
       }
     }
 
+    // Update World Boss Seismic Shockwave Rings (Jump or Dash over them!)
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.radius += sw.speed * delta;
+      sw.mesh.scale.set(sw.radius, 1.0, sw.radius);
+      sw.mesh.material.opacity = Math.max(0, 0.92 * (1.0 - sw.radius / sw.maxRadius));
+
+      if (!sw.hitPlayer && player && !player.isDead) {
+        const distXZ = Math.hypot(player.position.x - sw.origin.x, player.position.z - sw.origin.z);
+        const feetY = player.position.y - player.playerHeight;
+        // Player can jump over the seismic ring if feetY > sw.origin.y + 0.95
+        if (Math.abs(distXZ - sw.radius) < 0.78 && feetY <= sw.origin.y + 0.95) {
+          sw.hitPlayer = true;
+          if (this.shieldActive) {
+            audioSynth.playAegisCast();
+            this.createSparks(player.position, 0x33ccff, 10);
+          } else {
+            player.takeDamage(sw.damage);
+            if (this.telemetry) {
+              this.telemetry.spawnFloatingText(
+                player.position.clone().add(new THREE.Vector3(0, 0.4, 0)),
+                'SEISMIC SLAM! [JUMP OVER RING]',
+                '#ff6622',
+                1.15
+              );
+            }
+          }
+        }
+      }
+
+      if (sw.radius >= sw.maxRadius) {
+        this.scene.remove(sw.mesh);
+        sw.mesh.geometry.dispose();
+        sw.mesh.material.dispose();
+        this.shockwaves.splice(i, 1);
+      }
+    }
+
     // 6. Update Projectiles with 4-Step Swept Cylindrical Collision & Homing Soul Orbs
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
@@ -544,25 +778,51 @@ export class SpellSystem {
           }
         }
 
-        // B. Check Destructible Crystals
-        if (!collided && !proj.isEnemy && destructibles) {
-          for (let d = 0; d < destructibles.length; d++) {
-            const dest = destructibles[d];
-            if (dest.destroyed) continue;
-            const distXZ = Math.hypot(hitPos.x - dest.position.x, hitPos.z - dest.position.z);
-            const dy = Math.abs(hitPos.y - dest.position.y);
-            if (distXZ < dest.radius + proj.radius + 0.22 && dy < 1.4) {
-              collided = true;
-              dest.takeDamage(proj.damage, this);
-              break;
+        // B. Check Destructible Crystals & Shootable Arcane Rune Buttons
+        if (!collided && !proj.isEnemy) {
+          if (destructibles) {
+            for (let d = 0; d < destructibles.length; d++) {
+              const dest = destructibles[d];
+              if (dest.destroyed) continue;
+              const distXZ = Math.hypot(hitPos.x - dest.position.x, hitPos.z - dest.position.z);
+              const dy = Math.abs(hitPos.y - dest.position.y);
+              if (distXZ < dest.radius + proj.radius + 0.28 && dy < 1.65) {
+                collided = true;
+                const elem = proj.type === 'pyrobomb' ? 'fire' : proj.type;
+                dest.takeDamage(proj.damage, this, elem);
+                break;
+              }
+            }
+          }
+
+          const buttons = player && player.level && player.level.shootableButtons ? player.level.shootableButtons : null;
+          if (!collided && buttons) {
+            for (let b = 0; b < buttons.length; b++) {
+              const btn = buttons[b];
+              const dist = hitPos.distanceTo(btn.position);
+              if (dist < (btn.radius || 0.75) + proj.radius + 0.25) {
+                collided = true;
+                btn.trigger(this, player);
+                break;
+              }
             }
           }
         }
 
-        // C. Check Walls
+        // C. Check Walls & Closed Portcullis Doors
         if (!collided && walls) {
           for (let w = 0; w < walls.length; w++) {
             if (walls[w].boundingBox && walls[w].boundingBox.containsPoint(hitPos)) {
+              collided = true;
+              break;
+            }
+          }
+        }
+        const doors = player && player.level && player.level.doors ? player.level.doors : null;
+        if (!collided && doors) {
+          for (let d = 0; d < doors.length; d++) {
+            const door = doors[d];
+            if (!door.isOpen && door.boundingBox && door.boundingBox.containsPoint(hitPos)) {
               collided = true;
               break;
             }
@@ -583,7 +843,33 @@ export class SpellSystem {
         }
       }
 
-      proj.mesh.quaternion.copy(camQuat);
+      if (proj.orientToDirection) {
+        proj.mesh.lookAt(proj.mesh.position.clone().add(proj.direction));
+      } else if (!proj.spinGroup) {
+        proj.mesh.quaternion.copy(camQuat);
+      }
+
+      if (proj.spinGroup) {
+        proj.spinGroup.rotation.z += delta * 14.0;
+        if (proj.type === 'soul') {
+          proj.spinGroup.rotation.x += delta * 7.5;
+          proj.spinGroup.rotation.y += delta * 9.5;
+        }
+      }
+      if (proj.haloMesh) {
+        proj.haloMesh.quaternion.copy(camQuat);
+      }
+
+      // Emit subtle frost or poison trail sparks during flight
+      proj.trailTimer = (proj.trailTimer || 0) + delta;
+      if (proj.trailTimer >= 0.055) {
+        proj.trailTimer = 0;
+        if (proj.type === 'frost' || proj.type === 'wraith_frost') {
+          this.createSparks(proj.mesh.position, 0x66f4ff, 1);
+        } else if (proj.type === 'soul') {
+          this.createSparks(proj.mesh.position, 0x44ff33, 2);
+        }
+      }
 
       if (proj.ownsLight) {
         this.activeSpellLight.position.copy(proj.mesh.position);
@@ -611,12 +897,24 @@ export class SpellSystem {
             const dest = destructibles[d];
             if (dest.destroyed) continue;
             if (hitPos.distanceTo(dest.position) < proj.aoeRadius) {
-              dest.takeDamage(50, this);
+              dest.takeDamage(50, this, 'fire');
             }
           }
-        } else if (proj.type === 'frost') {
+
+          const buttons = player && player.level && player.level.shootableButtons ? player.level.shootableButtons : null;
+          if (buttons) {
+            for (let b = 0; b < buttons.length; b++) {
+              const btn = buttons[b];
+              if (hitPos.distanceTo(btn.position) < proj.aoeRadius * 0.85) {
+                btn.trigger(this, player);
+              }
+            }
+          }
+        } else if (proj.type === 'frost' || proj.type === 'wraith_frost') {
           audioSynth.playFrostHit();
           this.createSparks(hitPos, 0x55ddff, 10);
+        } else if (proj.type === 'soul') {
+          this.createSparks(hitPos, 0x44ff33, 10);
         } else {
           this.createSparks(hitPos, 0xaa44ff, 6);
         }

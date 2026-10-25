@@ -453,7 +453,8 @@ export class ChromaKeyProcessor {
 
   /**
    * Generates an 8-frame animated pixel-art fire material sequence from a static Torch or Brazier sprite cell.
-   * Keeps the iron sconce/tripod stationary while animating dancing flame tongues, heat shimmer & rising embers.
+   * Splits cleanly at the top rim of the iron sconce/brazier bowl (fBaseY) so the entire upper flame + pixel-art
+   * outline sways and stretches cohesively with zero holes, while the lower iron holder stays stationary.
    */
   static createAnimatedFireMaterials(baseTexture, cellIndex = 0, totalCols = 4, mode = 'torch') {
     if (!baseTexture || !baseTexture.image) return [];
@@ -468,22 +469,16 @@ export class ChromaKeyProcessor {
     extractCtx.drawImage(srcImg, cellIndex * cellW, 0, cellW, cellH, 0, 0, cellW, cellH);
 
     const srcData = extractCtx.getImageData(0, 0, cellW, cellH).data;
-    const isFlame = new Uint8Array(cellW * cellH);
 
     let fMinX = cellW, fMaxX = 0, fMinY = cellH, fMaxY = 0;
-    const maxFlameY = Math.floor(cellH * (mode === 'brazier' ? 0.60 : 0.52));
+    const maxFlameY = Math.floor(cellH * (mode === 'brazier' ? 0.56 : 0.49));
 
-    for (let y = 0; y < cellH; y++) {
+    for (let y = 0; y <= maxFlameY; y++) {
       for (let x = 0; x < cellW; x++) {
         const idx = y * cellW + x;
         const i = idx * 4;
-        const r = srcData[i];
-        const g = srcData[i + 1];
-        const b = srcData[i + 2];
         const a = srcData[i + 3];
-
-        if (a > 25 && y <= maxFlameY && r > 145 && r > b + 40 && (r > 180 || g > 85)) {
-          isFlame[idx] = 1;
+        if (a > 25) {
           if (x < fMinX) fMinX = x;
           if (x > fMaxX) fMaxX = x;
           if (y < fMinY) fMinY = y;
@@ -500,8 +495,8 @@ export class ChromaKeyProcessor {
     }
 
     const fCenterX = (fMinX + fMaxX) * 0.5;
-    const fBaseY = fMaxY;
-    const fHeight = Math.max(12, fBaseY - fMinY);
+    const fBaseY = maxFlameY;
+    const fHeight = Math.max(14, fBaseY - fMinY);
     const frameCount = 8;
     const materials = [];
 
@@ -514,55 +509,53 @@ export class ChromaKeyProcessor {
       const outImg = fCtx.createImageData(cellW, cellH);
       const dst = outImg.data;
 
-      // 1. Copy stationary iron holder / tripod base pixels first (with subtle warm firelight rim pulse)
-      const rimPulse = 1.0 + 0.12 * Math.sin(phase);
-      for (let y = 0; y < cellH; y++) {
+      // 1. Copy stationary iron holder / tripod base pixels (y > fBaseY) with subtle warm rim pulse
+      const rimPulse = 1.0 + 0.10 * Math.sin(phase);
+      for (let y = fBaseY; y < cellH; y++) {
         for (let x = 0; x < cellW; x++) {
-          const idx = y * cellW + x;
-          if (!isFlame[idx]) {
-            const i = idx * 4;
-            if (srcData[i + 3] > 0) {
-              const nearBowlRim = Math.abs(y - fBaseY) < 18 ? rimPulse : 1.0;
-              dst[i] = Math.min(255, Math.round(srcData[i] * nearBowlRim));
-              dst[i + 1] = Math.min(255, Math.round(srcData[i + 1] * (nearBowlRim * 0.96)));
-              dst[i + 2] = srcData[i + 2];
-              dst[i + 3] = srcData[i + 3];
-            }
+          const i = (y * cellW + x) * 4;
+          if (srcData[i + 3] > 0) {
+            const nearBowlRim = y - fBaseY < 16 ? rimPulse : 1.0;
+            dst[i] = Math.min(255, Math.round(srcData[i] * nearBowlRim));
+            dst[i + 1] = Math.min(255, Math.round(srcData[i + 1] * (nearBowlRim * 0.96)));
+            dst[i + 2] = srcData[i + 2];
+            dst[i + 3] = srcData[i + 3];
           }
         }
       }
 
-      // 2. Render dancing pixel-art flame tongues anchored at fBaseY
-      const topReach = Math.max(2, fMinY - 18);
-      for (let dy = topReach; dy <= fBaseY + 2; dy++) {
+      // 2. Render cohesive dancing pixel-art flame + outline (y <= fBaseY) anchored smoothly at fBaseY
+      const topReach = Math.max(2, fMinY - 16);
+      for (let dy = topReach; dy <= fBaseY; dy++) {
         const hFrac = Math.max(0, (fBaseY - dy) / fHeight);
         for (let dx = Math.max(2, fMinX - 16); dx <= Math.min(cellW - 3, fMaxX + 16); dx++) {
           const xNorm = (dx - fCenterX) / Math.max(12, (fMaxX - fMinX) * 0.5);
-          // Independent left/center/right tongue stretch + horizontal wave undulation
+          // Smoothly taper stretch & sway to 0 right at fBaseY so the sconce/brazier rim never separates
           const vStretch =
             1.0 +
-            0.14 * Math.sin(phase + xNorm * 2.4) +
-            0.07 * Math.cos(phase * 2.0 - xNorm * 3.1);
+            hFrac *
+              (0.14 * Math.sin(phase + xNorm * 2.2) +
+                0.06 * Math.cos(phase * 2.0 - xNorm * 2.9));
           const swayX =
-            Math.pow(hFrac, 1.15) *
-            (5.8 * Math.sin(phase - hFrac * 4.4) + 3.0 * Math.cos(phase * 2.0 + hFrac * 6.2));
+            Math.pow(hFrac, 1.2) *
+            (5.4 * Math.sin(phase - hFrac * 4.2) + 2.6 * Math.cos(phase * 2.0 + hFrac * 5.8));
 
-          // Quantize to 2px steps for authentic crisp pixel-art motion
-          const srcX = Math.round((dx - swayX) * 0.5) * 2 + (dx & 1);
-          const srcY = Math.round(fBaseY - (fBaseY - dy) / vStretch);
+          const srcX = Math.round(dx - swayX);
+          const srcY = Math.min(fBaseY, Math.round(fBaseY - (fBaseY - dy) / vStretch));
 
-          if (srcX >= 0 && srcX < cellW && srcY >= 0 && srcY < cellH) {
-            const sIdx = srcY * cellW + srcX;
-            if (isFlame[sIdx]) {
-              const si = sIdx * 4;
+          if (srcX >= 0 && srcX < cellW && srcY >= 0 && srcY <= fBaseY) {
+            const si = (srcY * cellW + srcX) * 4;
+            if (srcData[si + 3] > 20) {
               const di = (dy * cellW + dx) * 4;
-              // Do not overwrite opaque iron grate bars in front of the brazier flame
-              if (dst[di + 3] > 180 && dy > fBaseY - 14) continue;
+              const r = srcData[si];
+              const g = srcData[si + 1];
+              const b = srcData[si + 2];
+              const isBrightCore = r > 150 && r > b + 35;
+              const heatShimmer = isBrightCore ? Math.round(20 * Math.sin(phase + hFrac * 5.0)) : 0;
 
-              const heatShimmer = Math.round(22 * Math.sin(phase + hFrac * 5.2));
-              dst[di] = Math.min(255, srcData[si] + Math.max(0, heatShimmer));
-              dst[di + 1] = Math.min(255, Math.max(0, srcData[si + 1] + heatShimmer));
-              dst[di + 2] = srcData[si + 2];
+              dst[di] = Math.min(255, Math.max(0, r + heatShimmer));
+              dst[di + 1] = Math.min(255, Math.max(0, g + heatShimmer));
+              dst[di + 2] = b;
               dst[di + 3] = srcData[si + 3];
             }
           }
@@ -571,18 +564,18 @@ export class ChromaKeyProcessor {
 
       // 3. Add rising pixel-art ember sparks above the dancing flame tips
       const emberSeeds = [
-        { ox: -0.28, speed: 1.0, phaseOff: 0.0, size: 3 },
-        { ox: 0.22, speed: 1.0, phaseOff: 0.38, size: 3 },
-        { ox: -0.05, speed: 1.0, phaseOff: 0.65, size: 4 },
-        { ox: 0.35, speed: 1.0, phaseOff: 0.82, size: 2 },
-        { ox: -0.36, speed: 1.0, phaseOff: 0.52, size: 2 }
+        { ox: -0.26, speed: 1.0, phaseOff: 0.0, size: 3 },
+        { ox: 0.20, speed: 1.0, phaseOff: 0.38, size: 3 },
+        { ox: -0.04, speed: 1.0, phaseOff: 0.65, size: 4 },
+        { ox: 0.32, speed: 1.0, phaseOff: 0.82, size: 2 },
+        { ox: -0.32, speed: 1.0, phaseOff: 0.52, size: 2 }
       ];
       const flameW = Math.max(16, fMaxX - fMinX);
       for (let e = 0; e < emberSeeds.length; e++) {
         const es = emberSeeds[e];
         const t = ((f / frameCount) * es.speed + es.phaseOff) % 1.0;
-        const ex = Math.round(fCenterX + es.ox * flameW + Math.sin(t * Math.PI * 2 + e) * 5);
-        const ey = Math.round(fMinY + 14 - t * 26);
+        const ex = Math.round(fCenterX + es.ox * flameW + Math.sin(t * Math.PI * 2 + e) * 4);
+        const ey = Math.round(fMinY + 12 - t * 24);
         const sz = t > 0.75 ? Math.max(1, es.size - 1) : es.size;
 
         for (let py = 0; py < sz; py++) {
@@ -622,6 +615,174 @@ export class ChromaKeyProcessor {
     }
 
     return materials;
+  }
+
+  /**
+   * Splits the Skull Altar cell (cellIndex = 2 of decor) into:
+   * 1. `friezeMaterial`: The lower carved Gothic stone altar relief (wrapped around all 4 sides of the 3D altar table)
+   * 2. `bonesMaterials`: 8-frame animated Skulls, Crossbones & Green-Flamed Candles centered on top of the 3D table
+   */
+  static createSplitSkullAltarMaterials(baseTexture, cellIndex = 2, totalCols = 4) {
+    if (!baseTexture || !baseTexture.image) return null;
+    const srcImg = baseTexture.image;
+    const cellW = Math.floor(srcImg.width / totalCols);
+    const cellH = srcImg.height;
+
+    const extractCanvas = document.createElement('canvas');
+    extractCanvas.width = cellW;
+    extractCanvas.height = cellH;
+    const extractCtx = extractCanvas.getContext('2d');
+    extractCtx.drawImage(srcImg, cellIndex * cellW, 0, cellW, cellH, 0, 0, cellW, cellH);
+
+    const srcData = extractCtx.getImageData(0, 0, cellW, cellH).data;
+
+    // Find vertical bounds of the full sprite inside the cell
+    let minY = cellH, maxY = 0, minX = cellW, maxX = 0;
+    for (let y = 0; y < cellH; y++) {
+      for (let x = 0; x < cellW; x++) {
+        const a = srcData[(y * cellW + x) * 4 + 3];
+        if (a > 40) {
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+        }
+      }
+    }
+
+    if (maxY <= minY) return null;
+    const spriteH = maxY - minY;
+    // The carved stone cornice separating the top skull/candle pile from the lower stone altar base sits at ~56% down the sprite
+    const splitY = Math.floor(minY + spriteH * 0.56);
+
+    // 1. Build 4-Sided Carved Stone Frieze Material from the lower stone base (splitY .. maxY)
+    let friezeMinX = cellW, friezeMaxX = 0;
+    const midStoneY = Math.floor((splitY + maxY) * 0.5);
+    for (let y = splitY + 4; y <= maxY - 4; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (srcData[(y * cellW + x) * 4 + 3] > 180) {
+          if (x < friezeMinX) friezeMinX = x;
+          if (x > friezeMaxX) friezeMaxX = x;
+        }
+      }
+    }
+    // Inset slightly inside the stone bevel so the frieze fills 100% of each 3D box face with no transparent gaps
+    const cropX0 = Math.min(midStoneY > 0 ? friezeMinX + 6 : minX, cellW - 10);
+    const cropX1 = Math.max(cropX0 + 16, friezeMaxX - 6);
+    const cropY0 = splitY + 2;
+    const cropY1 = Math.max(cropY0 + 16, maxY - 2);
+
+    const friezeCanvas = document.createElement('canvas');
+    friezeCanvas.width = 256;
+    friezeCanvas.height = 128;
+    const friezeCtx = friezeCanvas.getContext('2d');
+    // Dark stone backing so no transparent pixels ever show on the 3D altar box
+    friezeCtx.fillStyle = '#3a3842';
+    friezeCtx.fillRect(0, 0, 256, 128);
+    friezeCtx.drawImage(
+      extractCanvas,
+      cropX0,
+      cropY0,
+      cropX1 - cropX0,
+      cropY1 - cropY0,
+      0,
+      0,
+      256,
+      128
+    );
+
+    const friezeTex = new THREE.CanvasTexture(friezeCanvas);
+    friezeTex.minFilter = THREE.NearestFilter;
+    friezeTex.magFilter = THREE.NearestFilter;
+    friezeTex.wrapS = THREE.ClampToEdgeWrapping;
+    friezeTex.wrapT = THREE.ClampToEdgeWrapping;
+    friezeTex.colorSpace = THREE.SRGBColorSpace;
+    friezeTex.needsUpdate = true;
+
+    const friezeMaterial = new THREE.MeshStandardMaterial({
+      map: friezeTex,
+      roughness: 0.72,
+      metalness: 0.15,
+      emissive: 0x16141c,
+      emissiveIntensity: 0.28
+    });
+
+    // 2. Build 8-Frame Animated Skulls, Crossbones & Green Candles Materials (minY .. splitY)
+    // Bottom-aligned so the skulls & candles rest directly on the center of the 3D altar tabletop!
+    const bonesCropH = Math.max(16, splitY - minY + 4);
+    const candleFlameMaxY = Math.floor(minY + bonesCropH * 0.48);
+    const frameCount = 8;
+    const bonesMaterials = [];
+
+    for (let f = 0; f < frameCount; f++) {
+      const phase = (f / frameCount) * Math.PI * 2;
+      const bCanvas = document.createElement('canvas');
+      bCanvas.width = cellW;
+      bCanvas.height = bonesCropH + 16;
+      const bCtx = bCanvas.getContext('2d');
+      const outImg = bCtx.createImageData(bCanvas.width, bCanvas.height);
+      const dst = outImg.data;
+      const yOff = 14;
+
+      for (let sy = minY; sy <= splitY; sy++) {
+        const dy = sy - minY + yOff;
+        if (dy < 0 || dy >= bCanvas.height) continue;
+
+        for (let sx = 0; sx < cellW; sx++) {
+          const si = (sy * cellW + sx) * 4;
+          const a = srcData[si + 3];
+          if (a <= 20) continue;
+
+          const r = srcData[si];
+          const g = srcData[si + 1];
+          const b = srcData[si + 2];
+
+          // Detect green/cyan candle flame pixels in the upper half of the skull pile
+          const isGreenFlame = sy <= candleFlameMaxY && g > 145 && (g > r + 15 || b > 140);
+          let targetX = sx;
+          let targetY = dy;
+
+          if (isGreenFlame) {
+            const hFrac = Math.max(0, (candleFlameMaxY - sy) / Math.max(10, candleFlameMaxY - minY));
+            const sway = Math.round(hFrac * 2.6 * Math.sin(phase + sx * 0.18));
+            const stretch = Math.round(hFrac * 2.2 * Math.cos(phase * 2.0 + sx * 0.12));
+            targetX = Math.max(1, Math.min(cellW - 2, sx + sway));
+            targetY = Math.max(1, Math.min(bCanvas.height - 2, dy - stretch));
+          }
+
+          const di = (targetY * bCanvas.width + targetX) * 4;
+          const glow = isGreenFlame ? Math.round(18 * Math.sin(phase + sy * 0.2)) : 0;
+          dst[di] = Math.min(255, Math.max(0, r + glow * 0.5));
+          dst[di + 1] = Math.min(255, Math.max(0, g + glow));
+          dst[di + 2] = Math.min(255, Math.max(0, b + glow * 0.8));
+          dst[di + 3] = a;
+        }
+      }
+
+      bCtx.putImageData(outImg, 0, 0);
+      const bTex = new THREE.CanvasTexture(bCanvas);
+      bTex.minFilter = THREE.NearestFilter;
+      bTex.magFilter = THREE.NearestFilter;
+      bTex.wrapS = THREE.ClampToEdgeWrapping;
+      bTex.wrapT = THREE.ClampToEdgeWrapping;
+      bTex.generateMipmaps = false;
+      bTex.colorSpace = THREE.SRGBColorSpace;
+      bTex.needsUpdate = true;
+
+      bonesMaterials.push(
+        new THREE.MeshBasicMaterial({
+          map: bTex,
+          transparent: true,
+          alphaTest: 0.08,
+          side: THREE.DoubleSide
+        })
+      );
+    }
+
+    return {
+      friezeMaterial,
+      bonesMaterials
+    };
   }
 
   /**

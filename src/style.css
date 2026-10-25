@@ -448,37 +448,38 @@ body, html {
   transform: translateY(-1px);
 }
 
-/* --- BOSS BAR --- */
+/* --- WORLD BOSS 4-PHASE RAID BAR & MECHANIC BANNER --- */
 .boss-bar-container {
   position: absolute;
-  top: 56px;
+  top: 54px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 520px;
-  max-width: 90vw;
+  width: 600px;
+  max-width: 92vw;
   z-index: 18;
 }
 
 .boss-title {
   font-family: 'Cinzel', serif;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 900;
-  color: #ee77ff;
-  text-shadow: 0 0 10px #aa00ff, 0 2px 4px #000;
-  letter-spacing: 1.5px;
-  margin-bottom: 5px;
+  color: #ffcc55;
+  text-shadow: 0 0 10px #ff5500, 0 2px 4px #000;
+  letter-spacing: 1.4px;
+  margin-bottom: 4px;
 }
 
 .boss-bar-track {
+  position: relative;
   width: 100%;
-  height: 18px;
-  background: #110022;
-  border: 2px solid #cc55ff;
+  height: 20px;
+  background: #110818;
+  border: 2px solid #d4af37;
   border-radius: 4px;
-  box-shadow: 0 0 14px rgba(153, 51, 204, 0.7), inset 0 0 8px #000;
+  box-shadow: 0 0 16px rgba(255, 110, 30, 0.65), inset 0 0 8px #000;
   overflow: hidden;
 }
 
@@ -487,6 +488,45 @@ body, html {
   width: 100%;
   background: linear-gradient(90deg, #8800cc, #dd33ff, #ffaaff);
   transition: width 0.15s ease-out;
+}
+
+.boss-phase-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 235, 160, 0.85);
+  box-shadow: 0 0 4px #000;
+  pointer-events: none;
+}
+
+.boss-mechanic-banner {
+  margin-top: 5px;
+  padding: 4px 14px;
+  background: rgba(14, 10, 22, 0.92);
+  border: 1.5px solid #ffd766;
+  border-radius: 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #77ffee;
+  text-shadow: 0 1px 3px #000;
+  letter-spacing: 0.7px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.85);
+}
+
+.overdrive-banner {
+  font-family: 'Cinzel', serif;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #fff2aa;
+  background: linear-gradient(90deg, rgba(160, 35, 0, 0.94), rgba(220, 120, 0, 0.94));
+  border: 2px solid #ffd700;
+  border-radius: 4px;
+  padding: 5px 10px;
+  text-shadow: 0 0 8px #ffaa00, 0 2px 3px #000;
+  box-shadow: 0 0 14px rgba(255, 160, 0, 0.75);
 }
 
 /* --- BOTTOM SPRITE-STYLED GOTHIC STONE & GOLD CONSOLE --- */

@@ -50,6 +50,40 @@ export class EnemyManager {
     this.aliveCount = this.enemies.length;
   }
 
+  /**
+   * Dynamically spawns a fodder minion during the World Boss encounter so the player
+   * can build Spell Combo stacks and trigger Superconduct Chain Lightning!
+   */
+  spawnBossMinion(type, x, y, z) {
+    const aliveMinions = this.enemies.filter((e) => !e.isDead && e.type !== 'arcane_eye');
+    if (aliveMinions.length >= 6) return null;
+
+    const texMap = {
+      gargoyle: this.enemyTextures.gargoyle,
+      skeleton: this.enemyTextures.skeleton,
+      fire_imp: this.enemyTextures.fireImp,
+      frost_wraith: this.enemyTextures.frostWraith,
+      dread_knight: this.enemyTextures.dreadKnight
+    };
+    const tex = texMap[type] || this.enemyTextures.fireImp;
+    const enemy = new Enemy(
+      this.scene,
+      type,
+      new THREE.Vector3(x, y, z),
+      tex,
+      this.spellSystem,
+      this.telemetry
+    );
+    enemy.isAggro = true;
+    enemy.aggroDelay = 0.25;
+    this.enemies.push(enemy);
+    this.aliveCount++;
+    if (this.spellSystem) {
+      this.spellSystem.createSparks(new THREE.Vector3(x, y + 1.0, z), 0xff4400, 14);
+    }
+    return enemy;
+  }
+
   update(delta, player, walls, level) {
     let aliveCount = 0;
 
@@ -61,7 +95,7 @@ export class EnemyManager {
         aliveCount++;
       } else if (enemy.type === 'arcane_eye' && !this.bossDefeated) {
         this.bossDefeated = true;
-        player.score += 2500;
+        player.score += 10000;
       }
     }
 

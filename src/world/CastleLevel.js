@@ -26,6 +26,7 @@ export class CastleLevel {
 
     this.walls = [];
     this.doors = [];
+    this.shootableButtons = [];
     this.torches = [];
     this.torchSprites = [];
     this.pickups = [];
@@ -39,6 +40,7 @@ export class CastleLevel {
     this.minimapRooms = [];
     this.minimapCorridors = [];
     this.graphEdges = [];
+    this.constellationState = this.createDefaultConstellationState();
 
     this.currentStageId = 'overworld';
     this.onPortalEnter = null;
@@ -306,17 +308,30 @@ export class CastleLevel {
     });
 
     this.darkIronMat = new THREE.MeshStandardMaterial({
-      color: 0x242832,
-      roughness: 0.42,
-      metalness: 0.78
+      color: 0x66748c,
+      emissive: 0x1e2534,
+      emissiveIntensity: 0.42,
+      roughness: 0.44,
+      metalness: 0.26
     });
 
     this.gildedGoldMat = new THREE.MeshStandardMaterial({
-      color: 0xd4af37,
-      emissive: 0x443008,
-      emissiveIntensity: 0.25,
-      roughness: 0.32,
-      metalness: 0.82
+      color: 0xffd65a,
+      emissive: 0x68460a,
+      emissiveIntensity: 0.45,
+      roughness: 0.34,
+      metalness: 0.32
+    });
+
+    this.forgeBrickMat = new THREE.MeshStandardMaterial({
+      map: lavaWallSet.albedo,
+      normalMap: lavaWallSet.normal,
+      roughnessMap: lavaWallSet.roughness,
+      color: 0xe68d6a,
+      emissive: 0x661c06,
+      emissiveIntensity: 0.65,
+      roughness: 0.62,
+      metalness: 0.14
     });
 
     // Shared Torch Sconce Material & 8-Frame Animated Flame Materials (Frame 3 of normalized pickups_and_props)
@@ -347,6 +362,11 @@ export class CastleLevel {
       4,
       'brazier'
     );
+    this.splitSkullAltar = ChromaKeyProcessor.createSplitSkullAltarMaterials(
+      this.spriteTextures.decor || this.spriteTextures.props,
+      2,
+      4
+    );
 
     // Pre-create 4 Decorative Dungeon Prop Materials from dungeon_decor_props.jpg
     // 0: Brazier, 1: Bookshelf, 2: Skull Altar, 3: Hanging Banner
@@ -375,6 +395,7 @@ export class CastleLevel {
     }
     this.walls = [];
     this.doors = [];
+    this.shootableButtons = [];
     this.torches = [];
     this.torchSprites = [];
     this.pickups = [];
@@ -388,7 +409,23 @@ export class CastleLevel {
     this.minimapRooms = [];
     this.minimapCorridors = [];
     this.graphEdges = [];
+    this.constellationState = this.createDefaultConstellationState();
     this.nearestPortal = null;
+  }
+
+  createDefaultConstellationState() {
+    return {
+      totalGems: 0,
+      brokenGems: 0,
+      countdownTimer: 0,
+      maxCountdown: 22.0,
+      active: false,
+      completed: false,
+      isBossTether: false,
+      bossRef: null,
+      tetherLines: [],
+      gems: []
+    };
   }
 
   loadStage(stageId, customSeed = null) {
@@ -890,52 +927,96 @@ export class CastleLevel {
   }
 
   /**
-   * Stage II Molten Forge Setpiece: 3D Obsidian Blast Furnace & Iron Forging Anvil
+   * Stage II Molten Forge Setpiece: 3D Smelting Blast Furnace (Oven) & Iron Forging Anvil
    */
   createForgeFurnaceAndAnvil(x, yBottom, z, rotY = 0) {
     const group = new THREE.Group();
     group.position.set(x, yBottom, z);
     group.rotation.y = rotY;
 
+    const brickMat = this.forgeBrickMat || this.activeWallMat;
+
     // Stepped Forge Hearth Base
-    const hearth = new THREE.Mesh(this.createTiledBoxGeometry(3.2, 0.45, 2.6, 3.0), this.activeWallMat);
+    const hearth = new THREE.Mesh(this.createTiledBoxGeometry(3.2, 0.45, 2.6, 2.8), brickMat);
     hearth.position.set(0, 0.225, 0);
     group.add(hearth);
 
-    // Tall Obsidian Smelting Chimney
-    const chimney = new THREE.Mesh(this.createTiledBoxGeometry(2.4, 3.8, 1.7, 3.0), this.activeWallMat);
-    chimney.position.set(0, 2.1, -0.35);
+    // Tall Smelting Chimney with warm emissive forge masonry so it never goes black
+    const chimney = new THREE.Mesh(this.createTiledBoxGeometry(2.4, 3.6, 1.7, 2.8), brickMat);
+    chimney.position.set(0, 2.0, -0.35);
     group.add(chimney);
 
+    // 3D Stone Firebox Hood framing the oven mouth
+    const hoodPillarL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 1.55, 0.36), this.gildedGoldMat);
+    hoodPillarL.position.set(-0.82, 1.18, 0.52);
+    const hoodPillarR = new THREE.Mesh(new THREE.BoxGeometry(0.38, 1.55, 0.36), this.gildedGoldMat);
+    hoodPillarR.position.set(0.82, 1.18, 0.52);
+    const hoodLintel = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.34, 0.42), this.gildedGoldMat);
+    hoodLintel.position.set(0, 1.98, 0.54);
+    group.add(hoodPillarL, hoodPillarR, hoodLintel);
+
     // Brass Crown Bands
-    const band1 = new THREE.Mesh(new THREE.BoxGeometry(2.56, 0.22, 1.86), this.gildedGoldMat);
-    band1.position.set(0, 2.9, -0.35);
+    const band1 = new THREE.Mesh(new THREE.BoxGeometry(2.58, 0.22, 1.88), this.gildedGoldMat);
+    band1.position.set(0, 2.85, -0.35);
     group.add(band1);
-    const band2 = new THREE.Mesh(new THREE.BoxGeometry(2.56, 0.22, 1.86), this.gildedGoldMat);
-    band2.position.set(0, 3.85, -0.35);
+    const band2 = new THREE.Mesh(new THREE.BoxGeometry(2.58, 0.22, 1.88), this.gildedGoldMat);
+    band2.position.set(0, 3.68, -0.35);
     group.add(band2);
 
-    // Glowing Molten Core Mouth
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
-    const coreMouth = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.25, 0.18), coreMat);
-    coreMouth.position.set(0, 1.15, 0.48);
-    group.add(coreMouth);
+    // Glowing Molten Core Mouth + Side & Rear Magma Vents so the oven glows from every direction
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+    const innerCoreMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+    const coreMouth = new THREE.Mesh(new THREE.BoxGeometry(1.32, 1.28, 0.22), coreMat);
+    coreMouth.position.set(0, 1.15, 0.46);
+    const innerMouth = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.88, 0.25), innerCoreMat);
+    innerMouth.position.set(0, 1.08, 0.48);
+    group.add(coreMouth, innerMouth);
+
+    const sideVentGeo = new THREE.BoxGeometry(2.48, 0.42, 0.65);
+    const sideVent = new THREE.Mesh(sideVentGeo, coreMat);
+    sideVent.position.set(0, 1.65, -0.35);
+    const backVent = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.95, 0.16), coreMat);
+    backVent.position.set(0, 1.4, -1.21);
+    group.add(sideVent, backVent);
+
+    // Animated Roaring Flame Sprite inside the Oven Mouth
+    if (this.brazierAnimMaterials && this.brazierAnimMaterials.length > 0) {
+      const fireWorldPos = new THREE.Vector3(0, 1.25, 0.62).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+      const fireMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.35), this.brazierAnimMaterials[0]);
+      fireMesh.position.set(x + fireWorldPos.x, yBottom + fireWorldPos.y, z + fireWorldPos.z);
+      this.stageGroup.add(fireMesh);
+      this.torchSprites.push({
+        mesh: fireMesh,
+        frames: this.brazierAnimMaterials,
+        fps: 11.0,
+        seed: Math.random() * 25
+      });
+    }
 
     // Molten Slag Trough in front
-    const trough = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.85), new THREE.MeshBasicMaterial({ color: 0xff8800 }));
-    trough.position.set(0, 0.47, 0.82);
-    group.add(trough);
+    const troughRim = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.18, 0.96), this.darkIronMat);
+    troughRim.position.set(0, 0.46, 0.84);
+    const trough = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.20, 0.78), new THREE.MeshBasicMaterial({ color: 0xff8800 }));
+    trough.position.set(0, 0.49, 0.84);
+    group.add(troughRim, trough);
 
-    // 3D Iron Anvil in front of furnace
-    const anvilBase = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.45, 0.65), this.darkIronMat);
-    anvilBase.position.set(0, 0.68, 1.65);
-    group.add(anvilBase);
-    const anvilTop = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.34, 0.52), this.darkIronMat);
-    anvilTop.position.set(0, 1.05, 1.65);
-    group.add(anvilTop);
+    // 3D Iron Anvil + Red-Hot Forged Ingot in front of furnace
+    const anvilPlinth = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.82), brickMat);
+    anvilPlinth.position.set(0, 0.54, 1.65);
+    const anvilBase = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.42, 0.65), this.darkIronMat);
+    anvilBase.position.set(0, 0.82, 1.65);
+    const anvilTop = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.34, 0.54), this.darkIronMat);
+    anvilTop.position.set(0, 1.16, 1.65);
+    const hotIngot = new THREE.Mesh(
+      new THREE.BoxGeometry(0.68, 0.10, 0.22),
+      new THREE.MeshBasicMaterial({ color: 0xff7711 })
+    );
+    hotIngot.position.set(0, 1.36, 1.65);
+    group.add(anvilPlinth, anvilBase, anvilTop, hotIngot);
 
     this.stageGroup.add(group);
-    this.createInvisibleColliderBox(x, yBottom, z, 3.1, 8.5, 3.2);
+    // Match actual furnace height (3.8m) instead of 8.5m so projectiles can pass over it
+    this.createInvisibleColliderBox(x, yBottom, z, 3.0, 3.8, 3.1);
   }
 
   /**
@@ -1014,7 +1095,7 @@ export class CastleLevel {
     }
 
     this.stageGroup.add(group);
-    this.createInvisibleColliderBox(x, yBottom, z, 2.1, 8.5, 2.1);
+    this.createInvisibleColliderBox(x, yBottom, z, 2.1, 3.45, 2.1);
   }
 
   /**
@@ -1083,7 +1164,7 @@ export class CastleLevel {
     });
 
     this.stageGroup.add(group);
-    this.createInvisibleColliderBox(x, yBottom, z, 1.8 * scale, 8.5, 1.8 * scale);
+    this.createInvisibleColliderBox(x, yBottom, z, 1.8 * scale, 2.85 * scale, 1.8 * scale);
   }
 
   /**
@@ -1136,7 +1217,7 @@ export class CastleLevel {
       bobAmp: 0.15,
       seed: Math.random() * 10
     });
-    this.createInvisibleColliderBox(x, yBottom, z, 1.6, 8.5, 1.6);
+    this.createInvisibleColliderBox(x, yBottom, z, 1.6, 3.6, 1.6);
   }
 
   /**
@@ -1190,8 +1271,8 @@ export class CastleLevel {
       this.stageGroup.add(group);
       group.updateMatrixWorld(true);
 
-      const collider = new THREE.Mesh(new THREE.BoxGeometry(cabinetW, 8.5, depth + 0.1));
-      collider.position.set(x, yBottom + 4.25, z);
+      const collider = new THREE.Mesh(new THREE.BoxGeometry(cabinetW, h, depth + 0.1));
+      collider.position.set(x, yBottom + h * 0.5, z);
       collider.rotation.y = resolvedRotY;
       collider.updateMatrixWorld(true);
       collider.boundingBox = new THREE.Box3().setFromObject(collider);
@@ -1215,34 +1296,89 @@ export class CastleLevel {
     }
 
     if (type === 'skull_altar') {
-      const w = 2.15 * scale;
-      const h = 1.95 * scale;
-      const altarW = w * 0.86;
-      const altarH = h * 0.38;
-      const altarDepth = 0.78 * scale;
+      // Split 3D Bone Altar:
+      // 1. 3D Stepped Altar Table with Carved Stone Frieze wrapped around all 4 sides
+      // 2. Centered Skulls, Crossbones & Animated Green Candles sitting in the center on top of the 3D table
+      // 3. Low collider matching actual altar height (no invisible sky pillar blocking projectiles!)
+      const tableW = 2.05 * scale;
+      const tableD = 1.18 * scale;
+      const tableTopY = 0.94 * scale;
 
       const group = new THREE.Group();
       group.position.set(x, yBottom, z);
       group.rotation.y = resolvedRotY;
 
-      const plinthGeo = this.createTiledBoxGeometry(altarW, altarH, altarDepth, 2.6);
-      const plinthMesh = new THREE.Mesh(plinthGeo, this.activeWallMat);
-      plinthMesh.position.set(0, altarH / 2, 0);
-      group.add(plinthMesh);
+      const stoneMat = this.pillarMaterial || this.activeWallMat;
+      const friezeMat =
+        this.splitSkullAltar && this.splitSkullAltar.friezeMaterial
+          ? this.splitSkullAltar.friezeMaterial
+          : stoneMat;
 
-      const frontMesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
-      frontMesh.position.set(0, h / 2, altarDepth / 2 + 0.02);
-      group.add(frontMesh);
+      // Bottom stepped stone plinth
+      const baseSlab = new THREE.Mesh(
+        this.createTiledBoxGeometry(tableW * 1.04, 0.16 * scale, tableD * 1.06, 2.4),
+        stoneMat
+      );
+      baseSlab.position.set(0, 0.08 * scale, 0);
+      group.add(baseSlab);
+
+      // 4-Sided Carved Gothic Frieze Body (scrollwork & shield relief wraps around all 4 vertical faces)
+      const bodyMats = [friezeMat, friezeMat, stoneMat, stoneMat, friezeMat, friezeMat];
+      const bodyBox = new THREE.Mesh(
+        new THREE.BoxGeometry(tableW * 0.90, 0.64 * scale, tableD * 0.88),
+        bodyMats
+      );
+      bodyBox.position.set(0, 0.48 * scale, 0);
+      group.add(bodyBox);
+
+      // Overhanging Carved Stone Tabletop Slab
+      const topSlab = new THREE.Mesh(
+        this.createTiledBoxGeometry(tableW, 0.14 * scale, tableD, 2.4),
+        stoneMat
+      );
+      topSlab.position.set(0, 0.87 * scale, 0);
+      group.add(topSlab);
+
+      // Necrotic emerald rune trim around tabletop perimeter
+      const runeTrim = new THREE.Mesh(
+        new THREE.BoxGeometry(tableW + 0.04, 0.03 * scale, tableD + 0.04),
+        new THREE.MeshBasicMaterial({ color: 0x33ff99 })
+      );
+      runeTrim.position.set(0, 0.90 * scale, 0);
+      group.add(runeTrim);
 
       this.stageGroup.add(group);
-      group.updateMatrixWorld(true);
 
-      const collider = new THREE.Mesh(new THREE.BoxGeometry(altarW, 8.5, altarDepth));
-      collider.position.set(x, yBottom + 4.25, z);
-      collider.rotation.y = resolvedRotY;
-      collider.updateMatrixWorld(true);
-      collider.boundingBox = new THREE.Box3().setFromObject(collider);
-      this.walls.push(collider);
+      // Centered Skulls, Crossbones & Animated Green Candles sitting right in the center of the 3D tabletop
+      const bonesW = 1.85 * scale;
+      const bonesH = 1.18 * scale;
+      const bonesFrames =
+        this.splitSkullAltar && this.splitSkullAltar.bonesMaterials && this.splitSkullAltar.bonesMaterials.length > 0
+          ? this.splitSkullAltar.bonesMaterials
+          : [mat];
+      const bonesMesh = new THREE.Mesh(new THREE.PlaneGeometry(bonesW, bonesH), bonesFrames[0]);
+      bonesMesh.position.set(x, yBottom + tableTopY + bonesH * 0.46, z);
+      this.stageGroup.add(bonesMesh);
+      this.torchSprites.push({
+        mesh: bonesMesh,
+        frames: bonesFrames,
+        fps: 8.5,
+        seed: Math.random() * 25
+      });
+
+      // Low collider (stops at tableTopY - 0.12 so player can jump onto the altar and projectiles pass freely above it!)
+      const colW = Math.abs(Math.cos(resolvedRotY)) > 0.5 ? tableW : tableD;
+      const colD = Math.abs(Math.cos(resolvedRotY)) > 0.5 ? tableD : tableW;
+      this.createInvisibleColliderBox(x, yBottom, z, colW, 0.82 * scale, colD);
+      this.heightZones.push({
+        type: 'flat',
+        isJumpPlatform: true,
+        xMin: x - colW / 2 - 0.15,
+        xMax: x + colW / 2 + 0.15,
+        zMin: z - colD / 2 - 0.15,
+        zMax: z + colD / 2 + 0.15,
+        y: yBottom + tableTopY
+      });
       return;
     }
 
@@ -1266,7 +1402,7 @@ export class CastleLevel {
     });
   }
 
-  createTorchSprite(x, y, z) {
+  createTorchSprite(x, y, z, wallDirX = 0, wallDirZ = 0) {
     const torchFrames = this.torchAnimMaterials && this.torchAnimMaterials.length > 0 ? this.torchAnimMaterials : [this.sharedTorchMat];
     const spriteMesh = new THREE.Mesh(this.sharedTorchGeo, torchFrames[0]);
     spriteMesh.position.set(x, y, z);
@@ -1275,8 +1411,216 @@ export class CastleLevel {
       mesh: spriteMesh,
       frames: torchFrames,
       fps: 11.5,
-      seed: Math.random() * 25
+      seed: Math.random() * 25,
+      wallDirX,
+      wallDirZ
     });
+  }
+
+  /**
+   * Creates a heavy 3D Runic Iron Portcullis Gate that blocks passage until opened by a Shootable Rune Button
+   */
+  createPortcullisDoor(x, yBottom, z, width = 5.4, height = 5.0, axis = 'Z', colorHex = 0xff4422) {
+    const gateGroup = new THREE.Group();
+    gateGroup.position.set(x, yBottom, z);
+    if (axis === 'X') {
+      gateGroup.rotation.y = Math.PI / 2;
+    }
+
+    // Horizontal Iron Crossbeams
+    const beam1 = new THREE.Mesh(new THREE.BoxGeometry(width, 0.24, 0.26), this.darkIronMat);
+    beam1.position.set(0, height * 0.22, 0);
+    const beam2 = new THREE.Mesh(new THREE.BoxGeometry(width, 0.24, 0.26), this.darkIronMat);
+    beam2.position.set(0, height * 0.56, 0);
+    const beam3 = new THREE.Mesh(new THREE.BoxGeometry(width, 0.28, 0.28), this.darkIronMat);
+    beam3.position.set(0, height * 0.88, 0);
+    gateGroup.add(beam1, beam2, beam3);
+
+    // Vertical Iron Portcullis Bars
+    const barCount = Math.max(5, Math.floor(width / 0.72));
+    for (let i = 0; i <= barCount; i++) {
+      const bx = -width / 2 + (i / barCount) * width;
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, height, 8), this.darkIronMat);
+      bar.position.set(bx, height / 2, 0);
+      gateGroup.add(bar);
+    }
+
+    // Central Glowing Rune Lock Medallion
+    const lockMat = new THREE.MeshBasicMaterial({ color: colorHex });
+    const lockRing = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), lockMat);
+    lockRing.position.set(0, height * 0.52, 0);
+    gateGroup.add(lockRing);
+
+    this.stageGroup.add(gateGroup);
+
+    const colW = axis === 'Z' ? width : 0.55;
+    const colD = axis === 'Z' ? 0.55 : width;
+    const boundingBox = new THREE.Box3(
+      new THREE.Vector3(x - colW / 2, yBottom, z - colD / 2),
+      new THREE.Vector3(x + colW / 2, yBottom + height + 1.5, z + colD / 2)
+    );
+
+    const doorObj = {
+      mesh: gateGroup,
+      lockMat,
+      isOpen: false,
+      isOpening: false,
+      baseY: yBottom,
+      openY: yBottom + height - 0.35,
+      boundingBox,
+      open: () => {
+        if (doorObj.isOpen) return;
+        doorObj.isOpen = true;
+        doorObj.isOpening = true;
+        lockMat.color.setHex(0x00ff99);
+      }
+    };
+
+    this.doors.push(doorObj);
+    return doorObj;
+  }
+
+  /**
+   * Creates an interactive 3D Shootable Arcane Rune Button on a wall or pedestal.
+   * Shooting it with any spell activates its linked portcullis door, bridge, or treasure mechanism!
+   */
+  createShootableButton(
+    x,
+    yCenter,
+    z,
+    facingYaw = 0,
+    label = 'SHOOT RUNE SWITCH',
+    onActivate = null,
+    targetPos = null
+  ) {
+    const group = new THREE.Group();
+    group.position.set(x, yCenter, z);
+    group.rotation.y = facingYaw;
+
+    // Carved Gilded Bezel Housing
+    const housing = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.96, 0.22), this.gildedGoldMat);
+    group.add(housing);
+
+    const innerPlate = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.76, 0.25), this.darkIronMat);
+    group.add(innerPlate);
+
+    // Protruding Glowing Rune Button Core
+    const buttonMat = new THREE.MeshBasicMaterial({ color: 0xff3322 });
+    const buttonCore = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.28, 8), buttonMat);
+    buttonCore.rotation.x = Math.PI / 2;
+    buttonCore.position.z = 0.18;
+    group.add(buttonCore);
+
+    // Rotating Outer Rune Target Ring
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffaa22, side: THREE.DoubleSide });
+    const runeRing = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.44, 8), ringMat);
+    runeRing.position.z = 0.22;
+    group.add(runeRing);
+    this.animatedMeshes.push({ mesh: runeRing, baseY: 0, rotSpeedY: 0, rotSpeedX: 0, bobAmp: 0, seed: 0 });
+
+    // Overhead Instruction Plaque
+    const signCanvas = document.createElement('canvas');
+    signCanvas.width = 384;
+    signCanvas.height = 96;
+    const ctx = signCanvas.getContext('2d');
+    const drawSign = (titleText, subText, borderCol, titleCol) => {
+      ctx.clearRect(0, 0, 384, 96);
+      ctx.fillStyle = 'rgba(12, 8, 20, 0.92)';
+      ctx.fillRect(6, 6, 372, 84);
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(6, 6, 372, 84);
+      ctx.font = 'bold 21px Cinzel, Georgia, serif';
+      ctx.fillStyle = titleCol;
+      ctx.textAlign = 'center';
+      ctx.fillText(titleText, 192, 42);
+      ctx.font = 'bold 16px Cinzel, Georgia, serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(subText, 192, 72);
+    };
+    drawSign(label, '[HIT WITH ANY SPELL]', '#ff5533', '#ffcc44');
+
+    const signTex = new THREE.CanvasTexture(signCanvas);
+    const signMat = new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide });
+    const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.52), signMat);
+    signMesh.position.set(x, yCenter + 0.92, z);
+    this.stageGroup.add(signMesh);
+    this.torchSprites.push({ mesh: signMesh, frames: null });
+
+    // Optional Glowing Conduit Line linking button to its target door/bridge
+    let conduitMat = null;
+    if (targetPos) {
+      conduitMat = new THREE.MeshBasicMaterial({ color: 0xff3322 });
+      const p1 = new THREE.Vector3(x, yCenter, z);
+      const p2 = new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z);
+      const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+      const len = p1.distanceTo(p2);
+      const conduitGeo = new THREE.CylinderGeometry(0.045, 0.045, len, 6);
+      conduitGeo.rotateX(Math.PI / 2);
+      const conduitMesh = new THREE.Mesh(conduitGeo, conduitMat);
+      conduitMesh.position.copy(mid);
+      conduitMesh.lookAt(p2);
+      this.stageGroup.add(conduitMesh);
+    }
+
+    // Raycast & Projectile Hit Sphere
+    const hitMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.72, 8, 8),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hitMesh.position.set(x, yCenter, z);
+    this.stageGroup.add(hitMesh);
+    this.stageGroup.add(group);
+
+    const btnObj = {
+      mesh: group,
+      hitMesh,
+      position: new THREE.Vector3(x, yCenter, z),
+      radius: 0.78,
+      activated: false,
+      trigger: (spellSystem, player) => {
+        if (btnObj.activated) return;
+        btnObj.activated = true;
+
+        // Depress button core & turn emerald green
+        buttonCore.position.z = 0.07;
+        buttonMat.color.setHex(0x00ff88);
+        ringMat.color.setHex(0x00ffcc);
+        if (conduitMat) conduitMat.color.setHex(0x00ff88);
+
+        drawSign('RUNE SWITCH ACTIVE', 'MECHANISM UNLOCKED!', '#00ff88', '#55ffcc');
+        signTex.needsUpdate = true;
+
+        audioSynth.playGrimoirePickup();
+        const activePlayer = player || (window.gameApp ? window.gameApp.player : null);
+        if (activePlayer) {
+          activePlayer.gainXP(35);
+          activePlayer.score += 175;
+        }
+        if (spellSystem) {
+          spellSystem.createSparks(btnObj.position, 0x00ff88, 16);
+          if (spellSystem.postProcessor) {
+            spellSystem.postProcessor.triggerChromaticPulse(0.65);
+          }
+        }
+        if (this.telemetry) {
+          this.telemetry.showNotice(`RUNE SWITCH ACTIVATED: ${label} (+35 XP)`, 2.6);
+          this.telemetry.spawnFloatingText(
+            btnObj.position.clone().add(new THREE.Vector3(0, 1.1, 0)),
+            'SWITCH ACTIVATED! +35 XP',
+            '#00ff99',
+            1.25
+          );
+        }
+
+        if (onActivate) {
+          onActivate(spellSystem, activePlayer);
+        }
+      }
+    };
+
+    this.shootableButtons.push(btnObj);
+    return btnObj;
   }
 
   createRoomLight(x, y, z, color, intensity = 4.5, dist = 26) {
@@ -1302,9 +1646,9 @@ export class CastleLevel {
     pillarRight.position.set(x + 1.65, yBottom + 1.95, z);
     this.stageGroup.add(pillarRight);
 
-    // Solid colliders for left and right portal pillars so player cannot walk through them
-    this.createInvisibleColliderBox(x - 1.65, yBottom, z, 0.72, 8.5, 0.72);
-    this.createInvisibleColliderBox(x + 1.65, yBottom, z, 0.72, 8.5, 0.72);
+    // Solid colliders for left and right portal pillars matching their 4.4m height
+    this.createInvisibleColliderBox(x - 1.65, yBottom, z, 0.72, 4.4, 0.72);
+    this.createInvisibleColliderBox(x + 1.65, yBottom, z, 0.72, 4.4, 0.72);
 
     const lintel = new THREE.Mesh(this.createTiledBoxGeometry(4.3, 0.75, 0.85, 2.8), pillarMat);
     lintel.position.set(x, yBottom + 3.95, z);
@@ -1365,75 +1709,478 @@ export class CastleLevel {
     });
   }
 
-  createFacetedCrystal(x, yBottom, z, colorHex) {
-    const geo = new THREE.OctahedronGeometry(0.55, 0);
+  /**
+   * Infers or assigns an Elemental Gem type ('fire' | 'frost' | 'lightning' | 'any')
+   * and returns its canonical visual color, badge text, and spell prompt.
+   */
+  resolveGemElementConfig(colorHex, explicitElement = null) {
+    let elem = explicitElement;
+    if (!elem) {
+      if (colorHex === 0xff5500 || colorHex === 0xff4411 || colorHex === 0xff3311 || colorHex === 0xff8800) {
+        elem = 'fire';
+      } else if (colorHex === 0x00eeff || colorHex === 0x44ccff || colorHex === 0x00ccff) {
+        elem = 'frost';
+      } else if (colorHex === 0xaa55ff || colorHex === 0xbb44ff || colorHex === 0xdd44ff) {
+        elem = 'lightning';
+      } else {
+        // Rotate across unlocked stage elements so every stage has a fun multi-colored constellation!
+        const idx = this.destructibles.length;
+        if (this.currentStageId === 'overworld') {
+          elem = idx % 2 === 0 ? 'fire' : 'any';
+        } else if (this.currentStageId === 'stage1' || this.currentStageId === 'stage2') {
+          elem = idx % 2 === 0 ? 'fire' : 'frost';
+        } else {
+          elem = ['fire', 'frost', 'lightning'][idx % 3];
+        }
+      }
+    }
+
+    if (elem === 'fire') {
+      return {
+        element: 'fire',
+        colorHex: 0xff3311,
+        badgeText: 'FIRE GEM [LMB]',
+        badgeColor: '#ff7733',
+        immuneText: 'FIRE GEM — USE PYROBOMB [LMB]!',
+        spellIndex: 0
+      };
+    }
+    if (elem === 'frost') {
+      return {
+        element: 'frost',
+        colorHex: 0x00eeff,
+        badgeText: 'FROST GEM [RMB]',
+        badgeColor: '#55ffff',
+        immuneText: 'FROST GEM — USE FROST LANCE [RMB]!',
+        spellIndex: 1
+      };
+    }
+    if (elem === 'lightning') {
+      return {
+        element: 'lightning',
+        colorHex: 0xbb44ff,
+        badgeText: 'VOLT GEM [MMB]',
+        badgeColor: '#dd88ff',
+        immuneText: 'VOLT GEM — USE ARCANE ARC [MMB]!',
+        spellIndex: 2
+      };
+    }
+    return {
+      element: 'any',
+      colorHex: 0xffdd33,
+      badgeText: 'ASTRAL GEM [ANY]',
+      badgeColor: '#ffee66',
+      immuneText: '',
+      spellIndex: -1
+    };
+  }
+
+  createFacetedCrystal(x, yBottom, z, colorHex, explicitElement = null) {
+    const cfg = this.resolveGemElementConfig(colorHex, explicitElement);
+    const finalColor = cfg.colorHex;
+
+    const geo = new THREE.OctahedronGeometry(0.62, 0);
     geo.computeVertexNormals();
 
     const mat = new THREE.MeshStandardMaterial({
-      color: colorHex,
-      emissive: colorHex,
-      emissiveIntensity: 0.24,
-      roughness: 0.2,
-      metalness: 0.32,
+      color: finalColor,
+      emissive: finalColor,
+      emissiveIntensity: 0.45,
+      roughness: 0.16,
+      metalness: 0.28,
       flatShading: true
     });
 
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, yBottom + 1.25, z);
-    mesh.scale.set(0.75, 1.55, 0.75);
+    mesh.position.set(x, yBottom + 1.32, z);
+    mesh.scale.set(0.82, 1.65, 0.82);
     mesh.rotation.y = 0.55;
     this.stageGroup.add(mesh);
 
-    const pedGeo = this.createTiledCylinderGeometry(0.42, 0.55, 0.5, 8, 2.6);
+    // Orbiting 3D Elemental Ring around the Gem
+    const ringGeo = new THREE.TorusGeometry(0.68, 0.045, 6, 20);
+    ringGeo.rotateX(Math.PI / 2.6);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: finalColor,
+      transparent: true,
+      opacity: 0.88
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.position.set(x, yBottom + 1.32, z);
+    this.stageGroup.add(ringMesh);
+
+    // Floating Elemental Badge Sign above the Gem so player knows which element to shoot
+    const badgeCanvas = document.createElement('canvas');
+    badgeCanvas.width = 256;
+    badgeCanvas.height = 64;
+    const bCtx = badgeCanvas.getContext('2d');
+    bCtx.fillStyle = 'rgba(10, 8, 16, 0.88)';
+    bCtx.fillRect(6, 8, 244, 48);
+    bCtx.strokeStyle = cfg.badgeColor;
+    bCtx.lineWidth = 3;
+    bCtx.strokeRect(6, 8, 244, 48);
+    bCtx.font = 'bold 20px Cinzel, Georgia, serif';
+    bCtx.fillStyle = cfg.badgeColor;
+    bCtx.textAlign = 'center';
+    bCtx.fillText(cfg.badgeText, 128, 39);
+
+    const badgeTex = new THREE.CanvasTexture(badgeCanvas);
+    const badgeMat = new THREE.MeshBasicMaterial({
+      map: badgeTex,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 0.42), badgeMat);
+    labelMesh.position.set(x, yBottom + 2.55, z);
+    this.stageGroup.add(labelMesh);
+    this.torchSprites.push({ mesh: labelMesh, frames: null });
+
+    // Generous invisible hitbox cylinder for Arcane Arc (Lightning) raycasts
+    const hitGeo = new THREE.CylinderGeometry(0.95, 0.95, 2.5, 8);
+    const hitMesh = new THREE.Mesh(hitGeo, new THREE.MeshBasicMaterial({ visible: false }));
+    hitMesh.position.set(x, yBottom + 1.3, z);
+    this.stageGroup.add(hitMesh);
+
+    const pedGeo = this.createTiledCylinderGeometry(0.45, 0.58, 0.52, 8, 2.6);
     const pedMesh = new THREE.Mesh(pedGeo, this.activeWallMat);
-    pedMesh.position.set(x, yBottom + 0.25, z);
+    pedMesh.position.set(x, yBottom + 0.26, z);
     this.stageGroup.add(pedMesh);
 
     const crystalObj = {
       mesh,
+      ringMesh,
+      labelMesh,
+      hitMesh,
+      pedMesh,
       mat,
-      position: new THREE.Vector3(x, yBottom + 1.1, z),
-      baseY: yBottom + 1.25,
-      radius: 0.75,
-      health: 30,
-      color: colorHex,
+      position: new THREE.Vector3(x, yBottom + 1.25, z),
+      yBottom,
+      baseY: yBottom + 1.32,
+      radius: 0.88,
+      maxHealth: 35,
+      health: 35,
+      color: finalColor,
+      requiredElement: cfg.element,
+      spellIndex: cfg.spellIndex,
+      immuneText: cfg.immuneText,
       destroyed: false,
       seed: Math.random() * 10,
-      takeDamage: (dmg, spellSystem) => {
+      respawnGem: () => {
+        crystalObj.destroyed = false;
+        crystalObj.health = crystalObj.maxHealth;
+        crystalObj.mesh.visible = true;
+        crystalObj.ringMesh.visible = true;
+        crystalObj.labelMesh.visible = true;
+      },
+      takeDamage: (dmg, spellSystem, hitElement = 'any') => {
         if (crystalObj.destroyed) return;
+
+        const player = window.gameApp ? window.gameApp.player : null;
+        const normalizedHit =
+          hitElement === 'pyrobomb' ? 'fire' :
+          hitElement === 'frost' ? 'frost' :
+          hitElement === 'lightning' ? 'lightning' : hitElement;
+
+        // Check Elemental Gem immunity (only enforce if player has unlocked that spell or is in Stage 5)
+        const playerHasRequiredSpell =
+          !player ||
+          crystalObj.spellIndex < 0 ||
+          this.currentStageId === 'stage5' ||
+          (player.spells[crystalObj.spellIndex] && player.spells[crystalObj.spellIndex].unlocked);
+
+        if (
+          crystalObj.requiredElement !== 'any' &&
+          playerHasRequiredSpell &&
+          normalizedHit !== 'any' &&
+          normalizedHit !== crystalObj.requiredElement
+        ) {
+          audioSynth.playAegisCast();
+          if (spellSystem) {
+            spellSystem.createSparks(crystalObj.position, 0xffffff, 6);
+          }
+          if (this.telemetry) {
+            this.telemetry.spawnFloatingText(
+              crystalObj.position.clone().add(new THREE.Vector3(0, 1.4, 0)),
+              crystalObj.immuneText,
+              cfg.badgeColor,
+              1.2
+            );
+          }
+          return;
+        }
+
         crystalObj.health -= dmg;
         audioSynth.playFrostHit();
         if (crystalObj.health <= 0) {
           crystalObj.destroyed = true;
-          this.stageGroup.remove(crystalObj.mesh);
-          if (window.gameApp && window.gameApp.player) {
-            window.gameApp.player.gainXP(25);
+          crystalObj.mesh.visible = false;
+          crystalObj.ringMesh.visible = false;
+          crystalObj.labelMesh.visible = false;
+
+          if (player) {
+            player.gainXP(30);
+            player.score += 200;
           }
           if (spellSystem) {
-            spellSystem.spawnPhysicsDebris(crystalObj.position, crystalObj.color, 8);
+            spellSystem.spawnPhysicsDebris(crystalObj.position, crystalObj.color, 10);
           }
-          if (this.telemetry) {
-            this.telemetry.spawnFloatingText(
-              crystalObj.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
-              'CRYSTAL SHATTERED +150 (+25 XP)',
-              '#66ffff',
-              1.2
-            );
-          }
-          this.spawnSinglePickup(
-            Math.random() > 0.45 ? 'mana' : 'health',
-            crystalObj.position.x,
-            yBottom,
-            crystalObj.position.z
-          );
+          this.SpawnPickupOnCrystalBreak(crystalObj);
+          this.onConstellationGemBroken(crystalObj, spellSystem);
         }
       }
     };
 
     this.destructibles.push(crystalObj);
+    this.constellationState.gems.push(crystalObj);
+    this.constellationState.totalGems = this.constellationState.gems.length;
+    this.rebuildConstellationTetherLines();
+    return crystalObj;
+  }
+
+  SpawnPickupOnCrystalBreak(crystalObj) {
+    this.spawnSinglePickup(
+      Math.random() > 0.45 ? 'mana' : 'health',
+      crystalObj.position.x,
+      crystalObj.yBottom,
+      crystalObj.position.z
+    );
+  }
+
+  /**
+   * Builds glowing 3D Constellation Star-Lines connecting all active Elemental Gems
+   * (or connecting them directly to the World Boss during Crystal Invulnerability!)
+   */
+  rebuildConstellationTetherLines() {
+    const st = this.constellationState;
+    if (!st) return;
+    for (let i = 0; i < st.tetherLines.length; i++) {
+      this.stageGroup.remove(st.tetherLines[i].line);
+      st.tetherLines[i].line.geometry.dispose();
+      st.tetherLines[i].line.material.dispose();
+    }
+    st.tetherLines = [];
+
+    const gems = st.gems;
+    if (!gems || gems.length === 0) return;
+
+    for (let i = 0; i < gems.length; i++) {
+      const gA = gems[i];
+      const targetPos =
+        st.isBossTether && st.bossRef && !st.bossRef.isDead
+          ? st.bossRef.position.clone().add(new THREE.Vector3(0, 3.8, 0))
+          : gems[(i + 1) % gems.length].position.clone();
+
+      const pts = [gA.position.clone(), targetPos];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: gA.color,
+        transparent: true,
+        opacity: 0.72
+      });
+      const line = new THREE.Line(lineGeo, lineMat);
+      this.stageGroup.add(line);
+      st.tetherLines.push({ line, gem: gA });
+    }
+  }
+
+  /**
+   * Handles Constellation Countdown start, bonus time per gem, and full Constellation Completion reward!
+   */
+  onConstellationGemBroken(crystalObj, spellSystem) {
+    const st = this.constellationState;
+    if (!st || st.completed) return;
+
+    st.brokenGems = st.gems.filter((g) => g.destroyed).length;
+    st.totalGems = st.gems.length;
+
+    if (st.brokenGems < st.totalGems) {
+      if (!st.active) {
+        st.active = true;
+        st.countdownTimer = st.maxCountdown;
+      } else {
+        st.countdownTimer = Math.min(st.maxCountdown + 5.0, st.countdownTimer + 4.0);
+      }
+
+      if (this.telemetry) {
+        this.telemetry.showNotice(
+          `CONSTELLATION GEM (${st.brokenGems}/${st.totalGems}) SHATTERED! BREAK ALL WITHIN ${st.countdownTimer.toFixed(0)}s!`,
+          3.0
+        );
+        this.telemetry.spawnFloatingText(
+          crystalObj.position.clone().add(new THREE.Vector3(0, 1.3, 0)),
+          `CONSTELLATION ${st.brokenGems}/${st.totalGems} (${st.countdownTimer.toFixed(0)}s LEFT!)`,
+          '#00ffcc',
+          1.35
+        );
+      }
+    } else {
+      // ALL GEMS IN THE CONSTELLATION ARE BROKEN BEFORE COUNTDOWN EXPIRED!
+      st.active = false;
+      st.completed = true;
+      for (let i = 0; i < st.tetherLines.length; i++) {
+        st.tetherLines[i].line.visible = false;
+      }
+
+      const player = window.gameApp ? window.gameApp.player : null;
+      if (player) {
+        player.gainXP(250);
+        player.score += 1000;
+      }
+
+      if (st.isBossTether && st.bossRef && !st.bossRef.isDead) {
+        st.bossRef.onBossConstellationBroken();
+        // Spawn 2 Timed Overdrive Potions (2.5x DMG) in the Boss Arena!
+        this.spawnSinglePickup('overdrive', -4.5, 0.0, 2.5);
+        this.spawnSinglePickup('overdrive', 4.5, 0.0, 2.5);
+      } else {
+        audioSynth.playGrimoirePickup();
+        this.spawnSinglePickup('overdrive', crystalObj.position.x, crystalObj.yBottom, crystalObj.position.z);
+        if (this.telemetry) {
+          this.telemetry.registerHit(true, 'CONSTELLATION COMPLETED! 2.5x OVERDRIVE POTION UNSEALED (+250 XP)');
+          this.telemetry.spawnFloatingText(
+            crystalObj.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
+            'CONSTELLATION COMPLETE! OVERDRIVE POTION SPAWNED!',
+            '#ffd700',
+            1.45
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Spawns a new Wave of Multi-Colored Elemental Tether Gems linked to the World Boss
+   * during Phase II (3 Gems: Fire, Frost, Lightning) and Phase IV (4 Gems: Fire, Frost, Lightning + Elevated Solar Gem)!
+   */
+  spawnBossConstellationWave(boss, waveNum = 1) {
+    // Clear any existing constellation gems
+    const st = this.constellationState;
+    for (let i = 0; i < st.tetherLines.length; i++) {
+      this.stageGroup.remove(st.tetherLines[i].line);
+    }
+    st.tetherLines = [];
+    for (let i = 0; i < st.gems.length; i++) {
+      const g = st.gems[i];
+      g.destroyed = true;
+      g.mesh.visible = false;
+      g.ringMesh.visible = false;
+      g.labelMesh.visible = false;
+    }
+    this.destructibles = [];
+    st.gems = [];
+
+    st.isBossTether = true;
+    st.bossRef = boss;
+    st.active = true;
+    st.completed = false;
+    st.maxCountdown = waveNum === 1 ? 24.0 : 28.0;
+    st.countdownTimer = st.maxCountdown;
+    st.brokenGems = 0;
+
+    // Spawn Multi-Colored Elemental Gems around the Boss Sanctum
+    this.createFacetedCrystal(-8.5, 0.0, 3.5, 0xff3311, 'fire');       // West Nave: FIRE GEM [LMB]
+    this.createFacetedCrystal(8.5, 0.0, 3.5, 0x00eeff, 'frost');       // East Nave: FROST GEM [RMB]
+    this.createFacetedCrystal(0.0, 2.0, -12.5, 0xbb44ff, 'lightning'); // Central Dais: LIGHTNING GEM [MMB]
+
+    if (waveNum >= 2) {
+      // Phase IV 4th Gem on the elevated jump-pad platform!
+      this.createFacetedCrystal(-12.5, 4.0, -11.5, 0xffdd33, 'any');
+    }
+
+    st.totalGems = st.gems.length;
+    this.rebuildConstellationTetherLines();
   }
 
   spawnSinglePickup(type, x, yBottom, z) {
+    if (type === 'overdrive') {
+      // Timed Special Damage Potion: Glowing 3D Golden-Crimson Alchemical Overdrive Elixir (2.5x Spell Damage for 12s!)
+      const group = new THREE.Group();
+      group.position.set(x, yBottom + 0.92, z);
+      this.stageGroup.add(group);
+
+      const flaskMat = new THREE.MeshStandardMaterial({
+        color: 0xff2200,
+        emissive: 0xff6600,
+        emissiveIntensity: 0.85,
+        roughness: 0.15,
+        metalness: 0.3
+      });
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: 0xffd700,
+        emissive: 0xaa6600,
+        emissiveIntensity: 0.5,
+        roughness: 0.2,
+        metalness: 0.6
+      });
+
+      const bulb = new THREE.Mesh(new THREE.OctahedronGeometry(0.38, 1), flaskMat);
+      bulb.scale.set(1.0, 1.25, 1.0);
+      group.add(bulb);
+
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.05, 6, 16), goldMat);
+      collar.rotation.x = Math.PI / 2;
+      collar.position.y = 0.22;
+      group.add(collar);
+
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.28, 8), goldMat);
+      neck.position.y = 0.42;
+      group.add(neck);
+
+      const stopper = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), new THREE.MeshBasicMaterial({ color: 0xffff88 }));
+      stopper.position.y = 0.64;
+      group.add(stopper);
+
+      // Floating "2.5X DMG POTION" Sign above the Elixir
+      const pCanvas = document.createElement('canvas');
+      pCanvas.width = 256;
+      pCanvas.height = 64;
+      const pCtx = pCanvas.getContext('2d');
+      pCtx.fillStyle = 'rgba(24, 10, 4, 0.90)';
+      pCtx.fillRect(6, 8, 244, 48);
+      pCtx.strokeStyle = '#ffd700';
+      pCtx.lineWidth = 3;
+      pCtx.strokeRect(6, 8, 244, 48);
+      pCtx.font = 'bold 19px Cinzel, Georgia, serif';
+      pCtx.fillStyle = '#ffdd44';
+      pCtx.textAlign = 'center';
+      pCtx.fillText('2.5X DMG POTION (12s)', 128, 39);
+
+      const pTex = new THREE.CanvasTexture(pCanvas);
+      const signMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.75, 0.44),
+        new THREE.MeshBasicMaterial({ map: pTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+      );
+      signMesh.position.y = 1.05;
+      group.add(signMesh);
+
+      const ringGeo = new THREE.RingGeometry(0.50, 0.92, 24);
+      ringGeo.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xffaa00,
+        side: THREE.DoubleSide
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.position.set(x, yBottom + 0.06, z);
+      this.stageGroup.add(ringMesh);
+
+      this.pickups.push({
+        type: 'overdrive',
+        mesh: group,
+        ringMesh,
+        mat: flaskMat,
+        x,
+        z,
+        yBottom,
+        baseY: yBottom + 0.92,
+        bobSeed: Math.random() * 10,
+        collected: false,
+        respawnTimer: 0,
+        canRespawn: this.currentStageId === 'stage5'
+      });
+      return;
+    }
+
     const frame = type === 'health' ? 0 : type === 'mana' ? 1 : 2;
     const tex = this.spriteTextures.props.clone();
     tex.needsUpdate = true;
@@ -1474,9 +2221,12 @@ export class CastleLevel {
       mat,
       x,
       z,
+      yBottom,
       baseY: yBottom + (type === 'grimoire' ? 0.95 : 0.75),
       bobSeed: Math.random() * 10,
-      collected: false
+      collected: false,
+      respawnTimer: 0,
+      canRespawn: false
     });
   }
 
@@ -1707,8 +2457,13 @@ export class CastleLevel {
         this.stageGroup.add(rib);
       }
 
-      this.createTorchSprite(edge.x - corrW / 2 + 0.28, yAvg + 2.6, zMid);
-      this.createTorchSprite(edge.x + corrW / 2 - 0.28, yAvg + 2.6, zMid);
+      // Place symmetric mirrored torch pair flush against Left & Right corridor walls (0.34m from inner wall surface)
+      const torchZOff = Math.min(1.65, corrLen * 0.22);
+      const zTorch = zMid - torchZOff;
+      const tZ = THREE.MathUtils.clamp((zTorch - edge.zStart) / ((edge.zEnd - edge.zStart) || 1), 0, 1);
+      const yTorch = THREE.MathUtils.lerp(edge.yStart, edge.yEnd, tZ) + 2.35;
+      this.createTorchSprite(edge.x - corrW / 2 + 0.34, yTorch, zTorch, 1, 0);
+      this.createTorchSprite(edge.x + corrW / 2 - 0.34, yTorch, zTorch, -1, 0);
       this.minimapCorridors.push({
         x: edge.x - corrW / 2,
         z: Math.min(edge.zStart, edge.zEnd),
@@ -1742,8 +2497,12 @@ export class CastleLevel {
         this.stageGroup.add(rib);
       }
 
-      this.createTorchSprite(xMid, yAvg + 2.6, edge.z - corrW / 2 + 0.28);
-      this.createTorchSprite(xMid, yAvg + 2.6, edge.z + corrW / 2 - 0.28);
+      const torchXOff = Math.min(1.65, corrLen * 0.22);
+      const xTorch = xMid - torchXOff;
+      const tX = THREE.MathUtils.clamp((xTorch - edge.xStart) / ((edge.xEnd - edge.xStart) || 1), 0, 1);
+      const yTorchEW = THREE.MathUtils.lerp(edge.yStart, edge.yEnd, tX) + 2.35;
+      this.createTorchSprite(xTorch, yTorchEW, edge.z - corrW / 2 + 0.34, 0, 1);
+      this.createTorchSprite(xTorch, yTorchEW, edge.z + corrW / 2 - 0.34, 0, -1);
       this.minimapCorridors.push({
         x: Math.min(edge.xStart, edge.xEnd),
         z: edge.z - corrW / 2,
@@ -2088,6 +2847,21 @@ export class CastleLevel {
           this.createInvisibleColliderBox(node.x + node.w / 2 - 3.4, node.y - 3.2, node.z, 4.8, 2.6, 7.2);
         }
 
+        // Interactive Shootable Rune Button by the Chasm Entrance Balcony:
+        // Shooting it summons a solid 3D Arcane Stone Bridge across the center of the chasm!
+        const bridgeSpanD = Math.max(6.0, node.d - 11.2);
+        this.createShootableButton(
+          node.x + 2.8,
+          node.y + 1.85,
+          node.z + node.d / 2 - 0.65,
+          Math.PI,
+          'SUMMON CHASM BRIDGE',
+          () => {
+            this.createJumpPlatform(node.x, node.y + 0.05, node.z, 4.2, bridgeSpanD, 0.7, 0x00ff99);
+          },
+          { x: node.x, y: node.y, z: node.z }
+        );
+
         // Procedurally Selected 3D Stepping-Stone Platforms bridging the Chasm Room
         if (chosenPlatformPattern === 'DIAMOND_ASCENT') {
           this.createJumpPlatform(node.x, node.y + 0.3, PZ(4.4), 3.8, 3.4, 0.75, biome.trimColor);
@@ -2167,11 +2941,41 @@ export class CastleLevel {
           biome.portalSubtitle,
           biome.portalColor
         );
+
+        // Sealed Sanctum Portcullis Gate + Shootable Arcane Rune Switch at the North Sanctum South Gateway!
+        const sanctumGateZ = node.z + node.d / 2;
+        const sanctumDoor = this.createPortcullisDoor(node.x, node.y, sanctumGateZ, 5.4, 5.0, 'Z', 0xff4422);
+        this.createShootableButton(
+          node.x - 3.65,
+          node.y + 2.25,
+          sanctumGateZ + 0.65,
+          0,
+          'OPEN SANCTUM GATE',
+          () => sanctumDoor.open(),
+          { x: node.x, y: node.y + 2.4, z: sanctumGateZ }
+        );
+
         enemies.push({ type: 'dread_knight', x: node.x - 4.0, y: node.y, z: node.z - 1.5 });
         enemies.push({ type: 'dread_knight', x: node.x + 4.0, y: node.y, z: node.z - 1.5 });
         enemies.push({ type: biome.enemyPool[0], x: node.x, y: node.y, z: node.z + 4.8 });
       } else if (node.archetype !== 'CHASM_PLATFORMING_HUB') {
         this.populateRoomArchetype(node, biome, enemies);
+
+        // Side-branch rooms feature a Shootable Arcane Supply Cache Switch that unseals bonus potions!
+        if (node.id === 'branch_west' || node.id === 'branch_east') {
+          this.createShootableButton(
+            node.x,
+            node.y + 2.2,
+            node.z - node.d / 2 + 0.68,
+            0,
+            'UNSEAL SUPPLY CACHE',
+            () => {
+              this.spawnSinglePickup('health', node.x - 1.8, node.y, node.z);
+              this.spawnSinglePickup('mana', node.x + 1.8, node.y, node.z);
+            },
+            { x: node.x, y: node.y + 0.5, z: node.z }
+          );
+        }
       }
 
       this.minimapRooms.push({
@@ -2253,8 +3057,18 @@ export class CastleLevel {
     buildTerraceZParapet(4.0, 6, 24, 7.0, 3.8);
     buildTerraceZParapet(4.0, -4, 24, 7.0, 3.8);
     this.createCrenellatedWall(12, 4.0, 1, 1.0, 10.6, 4.2, 0.85);
-    // West wall has gateway to Side Path 1 (Sunken Watchtower)
+    // West wall has gateway to Side Path 1 (Sunken Watchtower) sealed by a Portcullis + Shootable Rune Switch!
     buildTerraceXGatewayWall(-12, 4.0, 1, 10, 5.2, 4.2, 0x44aaff);
+    const watchtowerGate = this.createPortcullisDoor(-12, 4.0, 1, 4.8, 4.5, 'X', 0xff4422);
+    this.createShootableButton(
+      -11.35,
+      6.1,
+      4.2,
+      Math.PI / 2,
+      'OPEN WATCHTOWER GATE',
+      () => watchtowerGate.open(),
+      { x: -12, y: 6.2, z: 1 }
+    );
 
     // Staircase 1 -> 2 (z = -4..-12, y = 4.0..8.5, w = 7.0)
     this.createStaircaseZ(0, -4, -12, 4.0, 8.5, 7.0, 14, true, 3.8);
@@ -2274,8 +3088,18 @@ export class CastleLevel {
     // Terrace 3 (Stage III Alchemical Sanctum Terrace, y = 13.0, z = -40..-30, x = -12..12)
     this.createPlatformBlock(0, 13.0, -35, 24, 10, 16.0);
     buildTerraceZParapet(13.0, -30, 24, 7.0, 3.8);
-    // West wall has gateway to Side Path 3 (Moonlit Apothecary Cloister)
+    // West wall has gateway to Side Path 3 (Moonlit Apothecary Cloister) sealed by a Portcullis + Shootable Rune Switch!
     buildTerraceXGatewayWall(-12, 13.0, -35, 10, 5.2, 4.2, 0x33ff88);
+    const cloisterGate = this.createPortcullisDoor(-12, 13.0, -35, 4.8, 4.5, 'X', 0xff4422);
+    this.createShootableButton(
+      -11.35,
+      15.1,
+      -31.8,
+      Math.PI / 2,
+      'OPEN CLOISTER GATE',
+      () => cloisterGate.open(),
+      { x: -12, y: 15.2, z: -35 }
+    );
     // East wall has gateway receiving loop shortcut from East Smelter's Overlook!
     buildTerraceXGatewayWall(12, 13.0, -35, 10, 5.2, 4.2, 0xff6622);
 
@@ -2477,20 +3301,21 @@ export class CastleLevel {
     this.createRoomLight(0, 15.0, -28, 0xff6622, 4.8, 28);
     this.createRoomLight(0, 22.0, -58, 0x44eeff, 5.2, 32);
 
+    // Mount Overworld torches flush against Left (-X) & Right (+X) staircase balustrades & courtyard side walls
     [
-      { x: -3.5, y: 2.2, z: 14 },
-      { x: 3.5, y: 2.2, z: 14 },
-      { x: -3.5, y: 6.2, z: 6 },
-      { x: 3.5, y: 6.2, z: 6 },
-      { x: -3.5, y: 10.5, z: -12 },
-      { x: 3.5, y: 10.5, z: -12 },
-      { x: -3.5, y: 15.0, z: -30 },
-      { x: 3.5, y: 15.0, z: -30 },
-      { x: -3.5, y: 19.5, z: -50 },
-      { x: 3.5, y: 19.5, z: -50 },
-      { x: -3.5, y: 24.0, z: -68 },
-      { x: 3.5, y: 24.0, z: -68 }
-    ].forEach((t) => this.createTorchSprite(t.x, t.y, t.z));
+      { x: -10.16, y: 2.35, z: 20.0, dx: 1 },
+      { x: 10.16, y: 2.35, z: 20.0, dx: -1 },
+      { x: -3.16, y: 4.1, z: 10.0, dx: 1 },
+      { x: 3.16, y: 4.1, z: 10.0, dx: -1 },
+      { x: -3.16, y: 8.35, z: -8.0, dx: 1 },
+      { x: 3.16, y: 8.35, z: -8.0, dx: -1 },
+      { x: -3.16, y: 12.85, z: -26.0, dx: 1 },
+      { x: 3.16, y: 12.85, z: -26.0, dx: -1 },
+      { x: -11.16, y: 14.7, z: -45.0, dx: 1 },
+      { x: 11.16, y: 14.7, z: -45.0, dx: -1 },
+      { x: -3.16, y: 21.85, z: -64.0, dx: 1 },
+      { x: 3.16, y: 21.85, z: -64.0, dx: -1 }
+    ].forEach((t) => this.createTorchSprite(t.x, t.y, t.z, t.dx, 0));
 
     this.createFacetedCrystal(-3.8, 0.0, 15.5, 0x00ddff);
     this.createFacetedCrystal(3.8, 0.0, 15.5, 0x44ff88);
@@ -2594,31 +3419,51 @@ export class CastleLevel {
     this.createCrenellatedWall(0, 0.0, 18, 37, 1.0, 7.5, 1.0);
     this.createCrenellatedWall(0, 0.0, -28, 37, 1.2, 11.5, 1.0);
 
-    // West Nave Wall split around Reliquary Gateway (z = -4, doorW = 6.0)
+    // West Nave Wall split around Reliquary Gateway (z = -4, doorW = 6.0) + Shootable Portcullis Gate
     this.createCrenellatedWall(-18, 0.0, 8.5, 1.0, 19.0, 7.5, 1.0);
     this.createCrenellatedWall(-18, 0.0, -17.5, 1.0, 21.0, 7.5, 1.0);
     this.createDoorwayArchFrame(-18, 0.0, -4.0, 6.0, 5.6, 'X', 0xbb55ff);
+    const westReliquaryDoor = this.createPortcullisDoor(-18, 0.0, -4.0, 5.6, 5.2, 'X', 0xff4422);
+    this.createShootableButton(
+      -17.35,
+      2.3,
+      -0.2,
+      Math.PI / 2,
+      'OPEN WEST RELIQUARY',
+      () => westReliquaryDoor.open(),
+      { x: -18, y: 2.5, z: -4.0 }
+    );
     // West Reliquary Wing Perimeter Walls
     this.createCrenellatedWall(-24, 0.0, 4.0, 12.8, 1.0, 7.2, 0.9);
     this.createCrenellatedWall(-24, 0.0, -12.0, 12.8, 1.0, 7.2, 0.9);
     this.createCrenellatedWall(-30, 0.0, -4.0, 1.0, 16.8, 7.2, 0.9);
 
-    // East Nave Wall split around Reliquary Gateway (z = -4, doorW = 6.0)
+    // East Nave Wall split around Reliquary Gateway (z = -4, doorW = 6.0) + Shootable Portcullis Gate
     this.createCrenellatedWall(18, 0.0, 8.5, 1.0, 19.0, 7.5, 1.0);
     this.createCrenellatedWall(18, 0.0, -17.5, 1.0, 21.0, 7.5, 1.0);
     this.createDoorwayArchFrame(18, 0.0, -4.0, 6.0, 5.6, 'X', 0xbb55ff);
+    const eastReliquaryDoor = this.createPortcullisDoor(18, 0.0, -4.0, 5.6, 5.2, 'X', 0xff4422);
+    this.createShootableButton(
+      17.35,
+      2.3,
+      -0.2,
+      -Math.PI / 2,
+      'OPEN EAST RELIQUARY',
+      () => eastReliquaryDoor.open(),
+      { x: 18, y: 2.5, z: -4.0 }
+    );
     // East Reliquary Wing Perimeter Walls
     this.createCrenellatedWall(24, 0.0, 4.0, 12.8, 1.0, 7.2, 0.9);
     this.createCrenellatedWall(24, 0.0, -12.0, 12.8, 1.0, 7.2, 0.9);
     this.createCrenellatedWall(30, 0.0, -4.0, 1.0, 16.8, 7.2, 0.9);
 
-    // Populate West & East Reliquary Wings with Astral Orreries, Vats & Crystals
+    // Populate West & East Reliquary Wings with Astral Orreries, Vats & Overdrive Potions
     this.createAstralOrrery(-24, 0.0, -4.0, 0x00eeff);
     this.createAstralOrrery(24, 0.0, -4.0, 0xdd44ff);
     this.createArcaneFloorSigil(-24, 0.0, -4.0, 3.6, 0x00eeff);
     this.createArcaneFloorSigil(24, 0.0, -4.0, 3.6, 0xdd44ff);
-    this.createFacetedCrystal(-27, 0.0, 1.0, 0x00eeff);
-    this.createFacetedCrystal(27, 0.0, 1.0, 0xaa55ff);
+    this.spawnSinglePickup('overdrive', -24, 0.0, -8.2);
+    this.spawnSinglePickup('overdrive', 24, 0.0, -8.2);
     this.spawnSinglePickup('health', -27, 0.0, -9.0);
     this.spawnSinglePickup('mana', 27, 0.0, -9.0);
 
@@ -2659,20 +3504,21 @@ export class CastleLevel {
     this.createRoomLight(18, 6.0, -4, 0xff66ff, 4.8, 28);
     this.createRoomLight(0, 7.5, -20, 0x44eeff, 6.0, 32);
 
+    // Mount Stage 5 column torches flush against the 0.7m column shafts at x = ±9.5 (inner shaft face at x = ±8.8)
     [
-      { x: -8.8, y: 3.2, z: 8 },
-      { x: 8.8, y: 3.2, z: 8 },
-      { x: -8.8, y: 3.2, z: 0 },
-      { x: 8.8, y: 3.2, z: 0 },
-      { x: -8.8, y: 3.2, z: -8 },
-      { x: 8.8, y: 3.2, z: -8 }
-    ].forEach((t) => this.createTorchSprite(t.x, t.y, t.z));
+      { x: -8.46, y: 3.2, z: 8, dx: 1 },
+      { x: 8.46, y: 3.2, z: 8, dx: -1 },
+      { x: -8.46, y: 3.2, z: 0, dx: 1 },
+      { x: 8.46, y: 3.2, z: 0, dx: -1 },
+      { x: -8.46, y: 3.2, z: -8, dx: 1 },
+      { x: 8.46, y: 3.2, z: -8, dx: -1 }
+    ].forEach((t) => this.createTorchSprite(t.x, t.y, t.z, t.dx, 0));
 
-    this.createFacetedCrystal(-5.5, 0, 4, 0x00eeff);
-    this.createFacetedCrystal(5.5, 0, 4, 0x33ff88);
-    this.createFacetedCrystal(-6.5, 2.0, -15, 0xaa55ff);
-    this.createFacetedCrystal(6.5, 2.0, -15, 0x00eeff);
+    this.createFacetedCrystal(-5.5, 0, 4, 0xff3311, 'fire');
+    this.createFacetedCrystal(5.5, 0, 4, 0x00eeff, 'frost');
+    this.createFacetedCrystal(0.0, 2.0, -13.5, 0xbb44ff, 'lightning');
 
+    this.spawnSinglePickup('overdrive', 0.0, 0.0, 3.0);
     this.spawnSinglePickup('health', -14, 0, 10);
     this.spawnSinglePickup('mana', 14, 0, 10);
     this.spawnSinglePickup('health', -12.5, 4.0, -11.5);
@@ -2722,10 +3568,35 @@ export class CastleLevel {
       t.light.intensity = t.baseIntensity + Math.sin(time * 7.0 + t.flickerSeed) * 0.35;
     }
 
+    // Smoothly slide opened portcullis doors upward
+    for (let i = 0; i < this.doors.length; i++) {
+      const d = this.doors[i];
+      if (d.isOpening && d.mesh) {
+        d.mesh.position.y = THREE.MathUtils.lerp(d.mesh.position.y, d.openY, Math.min(1, delta * 4.5));
+        if (Math.abs(d.mesh.position.y - d.openY) < 0.05) {
+          d.mesh.position.y = d.openY;
+          d.isOpening = false;
+        }
+      }
+    }
+
     for (let i = 0; i < this.torchSprites.length; i++) {
       const ts = this.torchSprites[i];
       const mesh = ts.mesh || ts;
       mesh.lookAt(player.camera.position.x, mesh.position.y, player.camera.position.z);
+
+      // Horizontally mirror wall torches so the pixel-art sconce bracket always attaches into its wall
+      if (ts.wallDirX || ts.wallDirZ) {
+        const viewX = mesh.position.x - player.camera.position.x;
+        const viewZ = mesh.position.z - player.camera.position.z;
+        const rightX = -viewZ;
+        const rightZ = viewX;
+        const toWallX = -(ts.wallDirX || 0);
+        const toWallZ = -(ts.wallDirZ || 0);
+        const dotRight = toWallX * rightX + toWallZ * rightZ;
+        mesh.scale.x = dotRight >= 0 ? 1 : -1;
+      }
+
       if (ts.frames && ts.frames.length > 1) {
         const frameIdx = Math.floor(time * (ts.fps || 10) + (ts.seed || 0)) % ts.frames.length;
         if (mesh.material !== ts.frames[frameIdx]) {
@@ -2750,6 +3621,55 @@ export class CastleLevel {
       if (c.destroyed) continue;
       c.mesh.rotation.y += delta * 1.1;
       c.mesh.position.y = c.baseY + Math.sin(time * 2.2 + c.seed) * 0.12;
+      if (c.ringMesh) {
+        c.ringMesh.rotation.z += delta * 2.0;
+        c.ringMesh.rotation.y -= delta * 1.4;
+        c.ringMesh.position.y = c.mesh.position.y;
+      }
+    }
+
+    // Update Elemental Gem Constellation Countdown & Tether Beams
+    const st = this.constellationState;
+    if (st && !st.completed && st.gems.length > 0) {
+      for (let i = 0; i < st.tetherLines.length; i++) {
+        const tl = st.tetherLines[i];
+        tl.line.visible = !tl.gem.destroyed;
+        if (tl.line.visible && st.isBossTether && st.bossRef && !st.bossRef.isDead) {
+          const posAttr = tl.line.geometry.attributes.position;
+          if (posAttr) {
+            posAttr.setXYZ(0, tl.gem.position.x, tl.gem.position.y, tl.gem.position.z);
+            posAttr.setXYZ(1, st.bossRef.position.x, st.bossRef.position.y + 3.6, st.bossRef.position.z);
+            posAttr.needsUpdate = true;
+          }
+        }
+      }
+
+      if (st.active) {
+        st.countdownTimer -= delta;
+        if (st.countdownTimer <= 0) {
+          // Countdown expired before all gems were shattered — Regenerate the Constellation!
+          for (let i = 0; i < st.gems.length; i++) {
+            if (st.gems[i].destroyed) {
+              st.gems[i].respawnGem();
+            }
+          }
+          st.brokenGems = 0;
+          if (st.isBossTether) {
+            st.countdownTimer = st.maxCountdown;
+            st.active = true;
+          } else {
+            st.countdownTimer = 0;
+            st.active = false;
+          }
+          audioSynth.playAegisCast();
+          if (this.telemetry) {
+            this.telemetry.showNotice(
+              'CONSTELLATION COUNTDOWN EXPIRED — ELEMENTAL GEMS REGENERATED!',
+              3.2
+            );
+          }
+        }
+      }
     }
 
     for (let i = 0; i < this.jumpPads.length; i++) {
@@ -2806,7 +3726,17 @@ export class CastleLevel {
 
     for (let i = 0; i < this.pickups.length; i++) {
       const p = this.pickups[i];
-      if (p.collected) continue;
+      if (p.collected) {
+        if (p.canRespawn && p.respawnTimer > 0) {
+          p.respawnTimer -= delta;
+          if (p.respawnTimer <= 0) {
+            p.collected = false;
+            p.mesh.visible = true;
+            if (p.ringMesh) p.ringMesh.visible = true;
+          }
+        }
+        continue;
+      }
 
       p.mesh.position.y = p.baseY + Math.sin(time * 2.8 + p.bobSeed) * 0.14;
       p.mesh.lookAt(player.camera.position.x, p.mesh.position.y, player.camera.position.z);
@@ -2814,8 +3744,16 @@ export class CastleLevel {
       const dx = player.position.x - p.x;
       const dz = player.position.z - p.z;
       const dy = Math.abs(player.position.y - 0.9 - p.baseY);
-      if (dx * dx + dz * dz < 2.1 && dy < 2.2) {
-        if (p.type === 'health' && player.health < player.maxHealth) {
+      if (dx * dx + dz * dz < 2.2 && dy < 2.3) {
+        if (p.type === 'overdrive') {
+          p.collected = true;
+          p.mesh.visible = false;
+          if (p.ringMesh) p.ringMesh.visible = false;
+          if (p.canRespawn) p.respawnTimer = 22.0;
+          player.activateOverdrivePotion(12.0);
+          player.score += 350;
+          player.gainXP(35);
+        } else if (p.type === 'health' && player.health < player.maxHealth) {
           p.collected = true;
           p.mesh.visible = false;
           player.heal(35);

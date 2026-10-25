@@ -34,6 +34,15 @@ export class CombatTelemetry {
     }
   }
 
+  /**
+   * Displays a status/notice banner without incrementing the combat spell combo counter
+   */
+  showNotice(noticeText = '', duration = 2.0) {
+    if (!noticeText) return;
+    this.lastSynergyText = noticeText;
+    this.synergyTimer = duration;
+  }
+
   getComboMultiplier() {
     if (this.comboCount < 2) return 1.0;
     return Math.min(2.5, 1.0 + (this.comboCount - 1) * 0.15);

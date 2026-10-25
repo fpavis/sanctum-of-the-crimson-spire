@@ -104,9 +104,11 @@ export class HUD {
         <div class="quest-item" id="obj-elevation">[ALTITUDE] Castle Elevation: 20m</div>
         <div class="quest-item" id="obj-grimoire">[CODEX] Elder Grimoires: 0 / 4</div>
         <div class="quest-item" id="obj-enemies">[HOSTILES] Stage Enemies: 5 Remaining</div>
+        <div class="quest-item" id="obj-constellation">[CONSTELLATION] Gems: 0 / 3 Shattered</div>
         <div class="quest-item" id="obj-graph">[GRAPH] Nodes: 7 Rooms | LOS Raycast Active</div>
       </div>
       <div class="score-box" id="score-display">SCORE: 0</div>
+      <div class="overdrive-banner hidden" id="overdrive-display">OVERDRIVE POTION: 2.5x SPELL DMG (12.0s)</div>
       <div class="combo-box hidden" id="combo-display">2x SPELL COMBO (1.15x DMG)</div>
       <div class="synergy-banner hidden" id="synergy-display">THERMAL SHOCK SHATTER!</div>
     `;
@@ -153,14 +155,18 @@ export class HUD {
     this.minimapCanvas = this.minimapWrap.querySelector('#minimap-canvas');
     this.minimapCtx = this.minimapCanvas.getContext('2d');
 
-    // Boss Health Bar (3-Phase Arch-Beholder Void Eye)
+    // World Boss 4-Phase Raid Health Bar & Active Mechanic Banner
     this.bossBarContainer = document.createElement('div');
     this.bossBarContainer.className = 'boss-bar-container hidden';
     this.bossBarContainer.innerHTML = `
-      <div class="boss-title" id="boss-title-text">ARCH-BEHOLDER VOID EYE</div>
+      <div class="boss-title" id="boss-title-text">KHAR'ZUL THE WORLD-WEAVER [PHASE I / IV]</div>
       <div class="boss-bar-track">
         <div class="boss-bar-fill" id="boss-bar-fill"></div>
+        <div class="boss-phase-tick" style="left: 25%"></div>
+        <div class="boss-phase-tick" style="left: 50%"></div>
+        <div class="boss-phase-tick" style="left: 75%"></div>
       </div>
+      <div class="boss-mechanic-banner" id="boss-mechanic-text">[ELEMENTAL BLOCK: FROST ATTUNED] ONLY FROST LANCE [RMB] PENETRATES</div>
     `;
     this.container.appendChild(this.bossBarContainer);
 
@@ -208,10 +214,10 @@ export class HUD {
             <div class="spell-lock-badge">GRIMOIRE I</div>
             <div class="cooldown-overlay" id="cd-1"></div>
           </div>
-          <div class="spell-slot mobility-slot locked" id="slot-dash" title="Shift in Air or Double-Press Shift on Ground: Aether Jump Dash (Unlocked in Stage II Grimoire or Cheat 5555)">
+          <div class="spell-slot mobility-slot locked" id="slot-dash" title="Press Shift to Dash (Ground Dash on floor, Jump Dash in air); Hold Shift to Run (Unlocked in Stage II Grimoire or Cheat 5555)">
             <div class="spell-key">SHIFT</div>
             <div class="spell-icon-dash" id="icon-gfx-dash"></div>
-            <div class="spell-name">Jump Dash</div>
+            <div class="spell-name">Aether Dash</div>
             <div class="spell-cost">MOBILITY</div>
             <div class="spell-lock-badge">GRIMOIRE II</div>
             <div class="cooldown-overlay" id="cd-dash"></div>
@@ -299,11 +305,12 @@ export class HUD {
         <div class="controls-grid">
           <div class="control-row"><span>Left / Right / Middle Click:</span> <b>Pyrobomb (LMB) / Frost Lance (RMB) / Arcane Arc (MMB)</b></div>
           <div class="control-row"><span>Left + Right Click Together:</span> <b>Aegis Ward (L+R) / Double Cast: Repulsion Nova</b></div>
-          <div class="control-row"><span>Shift (In Air) / 2x Shift (Ground):</span> <b>Aether Jump Dash (Stage II Grimoire / 5555)</b></div>
-          <div class="control-row"><span>Walk into Portal / [E]:</span> <b>Enter Stage or Return to Ascent</b></div>
-          <div class="control-row"><span>Arcane Experience:</span> <b>+1% Spell DMG, Max HP & Mana per Level</b></div>
-          <div class="control-row"><span>RMB (Frost) -> LMB (Pyro):</span> <b>Thermal Shock Shatter (2.2x DMG)</b></div>
-          <div class="control-row"><span>RMB (Frost) -> MMB (Arcane):</span> <b>Superconduct Chain Lightning</b></div>
+          <div class="control-row"><span>Press Shift / Hold Shift:</span> <b>Press Shift: Dash (Ground/Air) | Hold Shift: Run</b></div>
+          <div class="control-row"><span>Elemental Constellation Gems:</span> <b>Match Gem Color (Fire/Frost/Volt) & Shatter All Before Countdown!</b></div>
+          <div class="control-row"><span>Overdrive Elixirs (2.5x DMG):</span> <b>Grants 2.5x Spell Damage & Fast Mana Regen for 12s</b></div>
+          <div class="control-row"><span>World Boss Mechanics:</span> <b>Match Elemental Block, Chain Combos for Shield & Break Tether Gems</b></div>
+          <div class="control-row"><span>RMB (Frost) -> LMB (Pyro):</span> <b>Thermal Shock Shatter (2.2x DMG + Breaks Combo Shield)</b></div>
+          <div class="control-row"><span>RMB (Frost) -> MMB (Arcane):</span> <b>Superconduct Chain Lightning (+Bonus Boss Surge)</b></div>
         </div>
         <button class="modal-close-btn" id="btn-close-help">RETURN TO SANCTUM</button>
       </div>
@@ -386,12 +393,15 @@ export class HUD {
       objElevation: document.getElementById('obj-elevation'),
       objGrimoire: document.getElementById('obj-grimoire'),
       objEnemies: document.getElementById('obj-enemies'),
+      objConstellation: document.getElementById('obj-constellation'),
       objGraph: document.getElementById('obj-graph'),
       scoreDisplay: document.getElementById('score-display'),
+      overdriveDisplay: document.getElementById('overdrive-display'),
       comboDisplay: document.getElementById('combo-display'),
       synergyDisplay: document.getElementById('synergy-display'),
       bossFill: document.getElementById('boss-bar-fill'),
       bossTitle: document.getElementById('boss-title-text'),
+      bossMechanic: document.getElementById('boss-mechanic-text'),
       victoryStats: document.getElementById('victory-stats')
     };
     this.frameCounter = 0;
@@ -532,16 +542,57 @@ export class HUD {
       });
     }
 
-    // Draw Pickups
+    // Draw Pickups (Including Golden-Orange Overdrive Potions)
     this.level.pickups.forEach(p => {
       if (p.collected) return;
       const dx = (p.x - px) * scale;
       const dz = (p.z - pz) * scale;
-      ctx.fillStyle = p.type === 'grimoire' ? '#ffd700' : p.type === 'health' ? '#ff4444' : '#44aaff';
+      ctx.fillStyle =
+        p.type === 'grimoire'
+          ? '#ffd700'
+          : p.type === 'overdrive'
+          ? '#ffaa00'
+          : p.type === 'health'
+          ? '#ff4444'
+          : '#44aaff';
       ctx.beginPath();
-      ctx.arc(dx, dz, p.type === 'grimoire' ? 3.5 : 2.2, 0, Math.PI * 2);
+      ctx.arc(dx, dz, p.type === 'grimoire' || p.type === 'overdrive' ? 3.5 : 2.2, 0, Math.PI * 2);
       ctx.fill();
     });
+
+    // Draw Elemental Constellation Gems as Color-Coded Diamonds on Automap
+    if (this.level.destructibles) {
+      this.level.destructibles.forEach((gem) => {
+        if (gem.destroyed) return;
+        const dx = (gem.position.x - px) * scale;
+        const dz = (gem.position.z - pz) * scale;
+        ctx.fillStyle =
+          gem.requiredElement === 'fire'
+            ? '#ff4422'
+            : gem.requiredElement === 'frost'
+            ? '#00eeff'
+            : gem.requiredElement === 'lightning'
+            ? '#cc66ff'
+            : '#ffee44';
+        ctx.beginPath();
+        ctx.moveTo(dx, dz - 3.6);
+        ctx.lineTo(dx + 3.6, dz);
+        ctx.lineTo(dx, dz + 3.6);
+        ctx.lineTo(dx - 3.6, dz);
+        ctx.closePath();
+        ctx.fill();
+      });
+    }
+
+    // Draw Shootable Arcane Rune Switches (Orange/Red when locked, Emerald Green when activated)
+    if (this.level.shootableButtons) {
+      this.level.shootableButtons.forEach((btn) => {
+        const dx = (btn.position.x - px) * scale;
+        const dz = (btn.position.z - pz) * scale;
+        ctx.fillStyle = btn.activated ? '#00ff88' : '#ff8822';
+        ctx.fillRect(dx - 2.5, dz - 2.5, 5, 5);
+      });
+    }
 
     // Draw Enemies (Highlighting LOS state)
     this.enemyManager.enemies.forEach(e => {
@@ -660,16 +711,38 @@ export class HUD {
       if (d.objElevation) d.objElevation.innerText = `[ALTITUDE] Castle Elevation: ${climbAlt}m`;
       if (d.objGrimoire) d.objGrimoire.innerText = `[CODEX] Elder Grimoires: ${this.player.grimoiresCollected} / 4`;
       if (d.objEnemies) d.objEnemies.innerText = `[HOSTILES] Stage Enemies: ${this.enemyManager.aliveCount} Remaining`;
+      if (d.objConstellation && this.level.constellationState) {
+        const cst = this.level.constellationState;
+        if (cst.completed) {
+          d.objConstellation.innerText = `[CONSTELLATION] COMPLETED — 2.5x POTION UNSEALED!`;
+          d.objConstellation.style.color = '#66ffaa';
+        } else if (cst.active) {
+          d.objConstellation.innerText = `[CONSTELLATION] ${cst.brokenGems} / ${cst.totalGems} Gems | ${cst.countdownTimer.toFixed(1)}s LEFT!`;
+          d.objConstellation.style.color = '#00ffcc';
+        } else {
+          d.objConstellation.innerText = `[CONSTELLATION] Elemental Gems: ${cst.brokenGems} / ${cst.totalGems}`;
+          d.objConstellation.style.color = '#e0d0b0';
+        }
+      }
       if (d.objGraph) {
         if (this.level.graphEdges && this.level.graphEdges.length > 0) {
           d.objGraph.innerText = `[GRAPH SEED #${this.level.currentSeed % 1000}] ${this.level.minimapRooms.length} Nodes | ${this.level.graphEdges.length} Edges`;
         } else if (this.level.currentStageId === 'stage5') {
-          d.objGraph.innerText = `[CITADEL SEED #${this.level.currentSeed % 1000}] Boss Sanctum + 2 Reliquary Wings`;
+          d.objGraph.innerText = `[CITADEL SEED #${this.level.currentSeed % 1000}] World Boss + 2 Reliquary Wings`;
         } else {
           d.objGraph.innerText = `[OVERWORLD] 6 Terraces + 4 Branching Side Courtyards`;
         }
       }
       if (d.scoreDisplay) d.scoreDisplay.innerText = `SCORE: ${this.player.score}`;
+
+      if (d.overdriveDisplay) {
+        if (this.player.overdriveTimer > 0) {
+          d.overdriveDisplay.classList.remove('hidden');
+          d.overdriveDisplay.innerText = `OVERDRIVE POTION: 2.5x SPELL DMG (${this.player.overdriveTimer.toFixed(1)}s)`;
+        } else {
+          d.overdriveDisplay.classList.add('hidden');
+        }
+      }
 
       if (this.telemetry && d.comboDisplay) {
         if (this.telemetry.comboCount >= 2) {
@@ -693,15 +766,24 @@ export class HUD {
       if (boss && boss.isAggro && !boss.isDead) {
         this.bossBarContainer.classList.remove('hidden');
         const bossPct = Math.max(0, boss.health / boss.maxHealth);
-        if (d.bossFill) d.bossFill.style.width = `${Math.floor(bossPct * 100)}%`;
-        if (d.bossTitle) {
-          if (boss.phase3) {
-            d.bossTitle.innerText = `ARCH-BEHOLDER [PHASE III: ASTRAL SINGULARITY] (${Math.ceil(boss.health)}/${boss.maxHealth} HP)`;
-          } else if (boss.enraged) {
-            d.bossTitle.innerText = `ARCH-BEHOLDER [PHASE II: VOID OVERDRIVE] (${Math.ceil(boss.health)}/${boss.maxHealth} HP)`;
+        if (d.bossFill) {
+          d.bossFill.style.width = `${Math.floor(bossPct * 100)}%`;
+          if (boss.bossCrystalInvuln) {
+            d.bossFill.style.background = 'linear-gradient(90deg, #aa0077, #ff00cc, #ff88ee)';
+          } else if (boss.bossVulnerableTimer > 0) {
+            d.bossFill.style.background = 'linear-gradient(90deg, #00aa55, #00ff99, #88ffcc)';
+          } else if (boss.bossComboShieldHits > 0) {
+            d.bossFill.style.background = 'linear-gradient(90deg, #b87700, #ffcc00, #ffee88)';
           } else {
-            d.bossTitle.innerText = `ARCH-BEHOLDER VOID EYE [PHASE I] (${Math.ceil(boss.health)}/${boss.maxHealth} HP)`;
+            d.bossFill.style.background = 'linear-gradient(90deg, #8800cc, #dd33ff, #ffaaff)';
           }
+        }
+        if (d.bossTitle) {
+          const phaseRoman = boss.bossPhase === 4 ? 'IV' : boss.bossPhase === 3 ? 'III' : boss.bossPhase === 2 ? 'II' : 'I';
+          d.bossTitle.innerText = `KHAR'ZUL THE WORLD-WEAVER [PHASE ${phaseRoman} / IV] (${Math.ceil(boss.health)} / ${boss.maxHealth} HP)`;
+        }
+        if (d.bossMechanic && boss.getBossMechanicStatus) {
+          d.bossMechanic.innerText = boss.getBossMechanicStatus(this.level);
         }
       } else {
         this.bossBarContainer.classList.add('hidden');
